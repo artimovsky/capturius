@@ -1,0 +1,270 @@
+<Window x:Class="Capturius.Windows.EditorWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Screenshot Editor"
+        Width="1200" Height="800"
+        Background="#1E1E2E"
+        WindowStartupLocation="CenterScreen"
+        WindowState="Maximized">
+    <Window.Resources>
+        <!-- Tool toggle button -->
+        <Style x:Key="ToolBtn" TargetType="ToggleButton">
+            <Setter Property="Foreground" Value="#CDD6F4"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="10,6"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontFamily" Value="Segoe UI"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="Bd"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="5"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#313244"/>
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#313244"/>
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#89B4FA"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Action button -->
+        <Style x:Key="ActionBtn" TargetType="Button">
+            <Setter Property="Foreground" Value="#CDD6F4"/>
+            <Setter Property="Background" Value="#313244"/>
+            <Setter Property="BorderBrush" Value="#45475A"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontFamily" Value="Segoe UI"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="5"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#45475A"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#585B70"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Primary action button (Save) -->
+        <Style x:Key="PrimaryBtn" TargetType="Button" BasedOn="{StaticResource ActionBtn}">
+            <Setter Property="Background" Value="#1E66F5"/>
+            <Setter Property="BorderBrush" Value="#1E66F5"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#2E77F6"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Separator -->
+        <Style x:Key="Sep" TargetType="Separator">
+            <Setter Property="Background" Value="#45475A"/>
+            <Setter Property="Width" Value="1"/>
+            <Setter Property="Margin" Value="6,4"/>
+        </Style>
+
+        <!-- Thickness RadioButton -->
+        <Style x:Key="ThickBtn" TargetType="RadioButton">
+            <Setter Property="Foreground" Value="#CDD6F4"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="Padding" Value="6,5"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="1" CornerRadius="4"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#313244"/>
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#313244"/>
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#89B4FA"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <DockPanel>
+        <!-- Toolbar -->
+        <Border DockPanel.Dock="Top" Background="#181825" Padding="8,4" BorderThickness="0,0,0,1" BorderBrush="#313244">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+
+                <!-- Tools -->
+                <ToggleButton x:Name="BtnArrow" Style="{StaticResource ToolBtn}"
+                              Checked="Tool_Checked" Tag="Arrow" IsChecked="True" ToolTip="Arrow">
+                    <Viewbox Width="16" Height="16">
+                        <Path Data="M4,2 L4,17 L7.5,13.5 L10.5,20 L12.5,19 L9.5,12.5 L14.5,12.5 Z" Fill="#CDD6F4"/>
+                    </Viewbox>
+                </ToggleButton>
+                <ToggleButton x:Name="BtnRect"  Style="{StaticResource ToolBtn}"
+                              Checked="Tool_Checked" Tag="Rect" Margin="2,0,0,0" ToolTip="Rectangle">
+                    <Viewbox Width="16" Height="16">
+                        <Path Data="M4,4H20V20H4V4M6,6V18H18V6H6Z" Fill="#CDD6F4"/>
+                    </Viewbox>
+                </ToggleButton>
+                <ToggleButton x:Name="BtnText"  Style="{StaticResource ToolBtn}"
+                              Checked="Tool_Checked" Tag="Text" Margin="2,0,0,0" ToolTip="Text">
+                    <Viewbox Width="16" Height="16">
+                        <Path Data="M5,4V7H11V19H13V7H19V4H5Z" Fill="#CDD6F4"/>
+                    </Viewbox>
+                </ToggleButton>
+                <ToggleButton x:Name="BtnCrop"  Style="{StaticResource ToolBtn}"
+                              Checked="Tool_Checked" Tag="Crop" Margin="2,0,0,0" ToolTip="Crop">
+                    <Viewbox Width="16" Height="16">
+                        <Path Data="M7,17H5V5A2,2 0 0,1 7,3H19V5H7V17M17,7H19V19A2,2 0 0,1 17,21H5V19H17V7Z" Fill="#CDD6F4"/>
+                    </Viewbox>
+                </ToggleButton>
+
+                <Separator Style="{StaticResource Sep}"/>
+
+                <!-- Colors -->
+                <TextBlock Text="Color:" Foreground="#585B70" FontSize="12" FontFamily="Segoe UI"
+                           VerticalAlignment="Center" Margin="0,0,6,0"/>
+                <ItemsControl x:Name="ColorPicker">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                </ItemsControl>
+
+                <Separator Style="{StaticResource Sep}"/>
+
+                <!-- Thickness -->
+                <TextBlock Text="Size:" Foreground="#585B70" FontSize="12" FontFamily="Segoe UI"
+                           VerticalAlignment="Center" Margin="0,0,6,0"/>
+                <RadioButton x:Name="Thick1" Style="{StaticResource ThickBtn}" Content="1" IsChecked="True"
+                             Checked="Thickness_Checked" Tag="1"/>
+                <RadioButton x:Name="Thick2" Style="{StaticResource ThickBtn}" Content="2"
+                             Checked="Thickness_Checked" Tag="2" Margin="2,0,0,0"/>
+                <RadioButton x:Name="Thick3" Style="{StaticResource ThickBtn}" Content="3"
+                             Checked="Thickness_Checked" Tag="3" Margin="2,0,0,0"/>
+                <RadioButton x:Name="Thick5" Style="{StaticResource ThickBtn}" Content="5"
+                             Checked="Thickness_Checked" Tag="5" Margin="2,0,0,0"/>
+
+                <Separator Style="{StaticResource Sep}"/>
+
+                <!-- Zoom -->
+                <Button Style="{StaticResource ActionBtn}" Content="−" Width="30" Click="ZoomOut_Click" ToolTip="Zoom out"/>
+                <TextBlock x:Name="ZoomLabel" Foreground="#CDD6F4" FontSize="12" FontFamily="Segoe UI"
+                           VerticalAlignment="Center" Margin="6,0" Width="38" TextAlignment="Center"/>
+                <Button Style="{StaticResource ActionBtn}" Content="+" Width="30" Click="ZoomIn_Click" ToolTip="Zoom in"/>
+                <Button Style="{StaticResource ActionBtn}" Content="1:1" Click="ZoomReset_Click"
+                        ToolTip="Reset zoom" Margin="4,0,0,0"/>
+
+                <Separator Style="{StaticResource Sep}"/>
+
+                <!-- Actions -->
+                <Button Style="{StaticResource ActionBtn}" Click="Undo_Click"
+                        ToolTip="Undo last action" Margin="0,0,4,0">
+                    <Viewbox Width="16" Height="16">
+                        <Path Data="M12.5,8C10.65,8 8.59,8.68 7.16,10L5,8V14H11L8.84,11.84C9.87,10.97 11.17,10.5 12.5,10.5C15.04,10.5 17.22,12.17 17.96,14.5L20.35,13.79C19.33,10.62 16.35,8 12.5,8Z" Fill="#CDD6F4"/>
+                    </Viewbox>
+                </Button>
+
+                <!-- Crop apply (visible only in crop mode) -->
+                <Button x:Name="BtnApplyCrop" Style="{StaticResource ActionBtn}"
+                        Click="ApplyCrop_Click" Margin="0,0,4,0" Visibility="Collapsed" ToolTip="Apply crop">
+                    <Viewbox Width="16" Height="16">
+                        <Path Data="M9,20.42L2.79,14.2L5.62,11.38L9,14.77L18.88,4.88L21.71,7.71L9,20.42Z" Fill="#CDD6F4"/>
+                    </Viewbox>
+                </Button>
+
+                <!-- Spacer -->
+                <Grid HorizontalAlignment="Right" Width="20"/>
+
+                <Button Style="{StaticResource ActionBtn}" Click="Copy_Click"
+                        ToolTip="Copy to clipboard" Margin="0,0,4,0">
+                    <Viewbox Width="16" Height="16">
+                        <Path Data="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z" Fill="#CDD6F4"/>
+                    </Viewbox>
+                </Button>
+                <Button Style="{StaticResource PrimaryBtn}" Click="Save_Click" ToolTip="Save file">
+                    <Viewbox Width="16" Height="16">
+                        <Path Data="M15,9H5V5H15M12,19A3,3 0 0,1 9,16A3,3 0 0,1 12,13A3,3 0 0,1 15,16A3,3 0 0,1 12,19M17,3H5C3.89,3 3,3.9 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V7L17,3Z" Fill="White"/>
+                    </Viewbox>
+                </Button>
+            </StackPanel>
+        </Border>
+
+        <!-- Image area -->
+        <ScrollViewer x:Name="Scroller"
+                      HorizontalScrollBarVisibility="Auto"
+                      VerticalScrollBarVisibility="Auto"
+                      PreviewMouseWheel="Scroller_PreviewMouseWheel">
+            <ScrollViewer.Background>
+                <DrawingBrush TileMode="Tile" Viewport="0,0,16,16" ViewportUnits="Absolute">
+                    <DrawingBrush.Drawing>
+                        <DrawingGroup>
+                            <GeometryDrawing Brush="#606060">
+                                <GeometryDrawing.Geometry><RectangleGeometry Rect="0,0,16,16"/></GeometryDrawing.Geometry>
+                            </GeometryDrawing>
+                            <GeometryDrawing Brush="#4A4A4A">
+                                <GeometryDrawing.Geometry>
+                                    <GeometryGroup>
+                                        <RectangleGeometry Rect="0,0,8,8"/>
+                                        <RectangleGeometry Rect="8,8,8,8"/>
+                                    </GeometryGroup>
+                                </GeometryDrawing.Geometry>
+                            </GeometryDrawing>
+                        </DrawingGroup>
+                    </DrawingBrush.Drawing>
+                </DrawingBrush>
+            </ScrollViewer.Background>
+            <Grid x:Name="ZoomedContent" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <Grid.LayoutTransform>
+                    <ScaleTransform x:Name="ZoomTransform"/>
+                </Grid.LayoutTransform>
+                <Image x:Name="MainImage" Stretch="None"
+                       RenderOptions.BitmapScalingMode="NearestNeighbor"/>
+                <Canvas x:Name="AnnotationCanvas"
+                        Background="Transparent"
+                        MouseLeftButtonDown="Canvas_MouseDown"
+                        MouseMove="Canvas_MouseMove"
+                        MouseLeftButtonUp="Canvas_MouseUp"/>
+            </Grid>
+        </ScrollViewer>
+    </DockPanel>
+</Window>
