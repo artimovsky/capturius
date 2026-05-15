@@ -27,10 +27,15 @@ jobs:
       - name: Publish framework-dependent
         run: dotnet publish "-p:PublishProfile=Framework"
 
+      - name: Rename artifacts
+        run: |
+          mv publish/self-contained/Capturius.exe publish/Capturius-SelfContained.exe
+          mv publish/framework-dependent/Capturius.exe publish/Capturius.exe
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            publish/self-contained/Capturius.exe
-            publish/framework-dependent/Capturius.exe
+            publish/Capturius-SelfContained.exe
+            publish/Capturius.exe
           generate_release_notes: true
