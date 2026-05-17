@@ -12,24 +12,53 @@ namespace Capturius.Windows;
 
 public partial class EditorWindow : Window
 {
+    // ── Annotation model ──────────────────────────────────────────────────────
+
+    private class Annotation
+    {
+        public required string    Tool            { get; init; }
+        public required UIElement Element         { get; set; }
+        // Arrow-specific (used for re-rendering when properties change)
+        public Point  Start           { get; set; }
+        public Point  End             { get; set; }
+        public Color  FillColor       { get; set; }
+        public Color  StrokeColor     { get; set; }
+        public double Thickness       { get; set; }
+        public double StrokeThickness { get; set; }
+        public double Shadow          { get; set; }
+    }
+
+    // ── Fields ────────────────────────────────────────────────────────────────
+
     private BitmapSource _bitmapSource;
     private string _currentTool = "Arrow";
-    private Color _currentColor = Colors.Red;
+    private Color  _currentColor = Colors.Red;
     private double _currentThickness = 1;
     private double _zoomLevel = 1.0;
     private readonly double _dpiScale = ScreenCaptureService.GetDpiScale();
 
     private Point _drawStart;
-    private bool _isDrawing;
+    private bool  _isDrawing;
+
+    // Arrow tool state
+    private Color  _arrowFillColor       = Colors.Red;
+    private Color  _arrowStrokeColor     = Colors.Black;
+    private double _arrowThickness       = 2;
+    private double _arrowStrokeThickness = 0;
+    private double _arrowShadow          = 0;
 
     // Temporary shape shown while dragging
     private UIElement? _previewElement;
-    // All committed annotation elements (for undo)
-    private readonly List<UIElement> _annotations = new();
+    // All committed annotations
+    private readonly List<Annotation> _annotations = new();
+
+    // Selection state
+    private Annotation?         _selectedAnnotation;
+    private readonly List<UIElement> _selectionHandles = new();
 
     // Crop selection state
     private System.Windows.Rect _cropRect;
-    private Rectangle? _cropBorder;
+    private Rectangle?          _cropBorder;
 
     private static readonly (Color Color, string Name)[] ColorPresets =
     [
@@ -47,16 +76,76 @@ public partial class EditorWindow : Window
 
         _bitmapSource = bitmapSource;
         MainImage.Source = bitmapSource;
-        AnnotationCanvas.Width = bitmapSource.PixelWidth;
+        AnnotationCanvas.Width  = bitmapSource.PixelWidth;
         AnnotationCanvas.Height = bitmapSource.PixelHeight;
 
+        LoadArrowSettings();
         BuildColorPicker();
+        BuildArrowColorPickers();
         SetZoom(1.0);
+
+        Loaded += (_, _) => ApplyArrowRadioSelections();
+
+        PreviewKeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Z && (Keyboard.Modifiers & ModifierKeys.Control) != 0)
+            {
+                Undo_Click(this, new RoutedEventArgs());
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Delete && _selectedAnnotation != null)
+            {
+                DeleteAnnotation(_selectedAnnotation);
+                e.Handled = true;
+            }
+            else if (e.Key == Key.S && (Keyboard.Modifiers & ModifierKeys.Control) != 0)
+            {
+                Save_Click(this, new RoutedEventArgs());
+                e.Handled = true;
+            }
+            else if (e.Key == Key.C && (Keyboard.Modifiers & ModifierKeys.Control) != 0)
+            {
+                Copy_Click(this, new RoutedEventArgs());
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Escape)
+            {
+                DeselectAnnotation();
+                e.Handled = true;
+            }
+        };
     }
 
     // ── Color picker ──────────────────────────────────────────────────────────
 
     private void BuildColorPicker()
+    {
+        BuildColorPickerItems(ColorPicker, () => _currentColor, c =>
+        {
+            _currentColor = c;
+            UpdatePickerSelection(ColorPicker, c);
+        });
+    }
+
+    private void BuildArrowColorPickers()
+    {
+        BuildColorPickerItems(ArrowFillPicker, () => _arrowFillColor, c =>
+        {
+            _arrowFillColor = c;
+            UpdatePickerSelection(ArrowFillPicker, c);
+            SaveArrowSettings();
+            RedrawSelectedAnnotation();
+        });
+        BuildColorPickerItems(ArrowStrokePicker, () => _arrowStrokeColor, c =>
+        {
+            _arrowStrokeColor = c;
+            UpdatePickerSelection(ArrowStrokePicker, c);
+            SaveArrowSettings();
+            RedrawSelectedAnnotation();
+        });
+    }
+
+    private void BuildColorPickerItems(ItemsControl control, Func<Color> getColor, Action<Color> onSelect)
     {
         foreach (var (color, name) in ColorPresets)
         {
@@ -69,26 +158,20 @@ public partial class EditorWindow : Window
                 Cursor = Cursors.Hand,
                 ToolTip = name,
                 BorderThickness = new Thickness(2),
-                BorderBrush = color == _currentColor
+                BorderBrush = color == getColor()
                     ? new SolidColorBrush(Colors.White)
                     : Brushes.Transparent,
                 Tag = color,
             };
-            btn.MouseLeftButtonDown += ColorBtn_Click;
-            ColorPicker.Items.Add(btn);
+            btn.MouseLeftButtonDown += (s, e) => onSelect((Color)((Border)s).Tag);
+            control.Items.Add(btn);
         }
     }
 
-    private void ColorBtn_Click(object sender, MouseButtonEventArgs e)
+    private static void UpdatePickerSelection(ItemsControl control, Color selected)
     {
-        _currentColor = (Color)((Border)sender).Tag;
-
-        foreach (Border b in ColorPicker.Items)
-        {
-            b.BorderBrush = (Color)b.Tag == _currentColor
-                ? Brushes.White
-                : Brushes.Transparent;
-        }
+        foreach (Border b in control.Items)
+            b.BorderBrush = (Color)b.Tag == selected ? Brushes.White : Brushes.Transparent;
     }
 
     // ── Toolbar handlers ──────────────────────────────────────────────────────
@@ -100,11 +183,17 @@ public partial class EditorWindow : Window
         _currentTool = ((ToggleButton)sender).Tag!.ToString()!;
         UncheckOtherTools((ToggleButton)sender);
 
-        bool isCrop = _currentTool == "Crop";
-        BtnApplyCrop.Visibility = isCrop ? Visibility.Visible : Visibility.Collapsed;
+        bool isCrop  = _currentTool == "Crop";
+        bool isArrow = _currentTool == "Arrow";
+
+        BtnApplyCrop.Visibility     = isCrop  ? Visibility.Visible   : Visibility.Collapsed;
+        GlobalProperties.Visibility = isArrow ? Visibility.Collapsed : Visibility.Visible;
+        ArrowProperties.Visibility  = isArrow ? Visibility.Visible   : Visibility.Collapsed;
 
         if (!isCrop) RemoveCropPreview();
         AnnotationCanvas.Cursor = _currentTool == "Text" ? Cursors.IBeam : Cursors.Cross;
+
+        DeselectAnnotation();
     }
 
     private void UncheckOtherTools(ToggleButton active)
@@ -119,9 +208,81 @@ public partial class EditorWindow : Window
             _currentThickness = t;
     }
 
+    private void ArrowThickness_Checked(object sender, RoutedEventArgs e)
+    {
+        if (double.TryParse(((RadioButton)sender).Tag?.ToString(), out var t))
+        { _arrowThickness = t; SaveArrowSettings(); RedrawSelectedAnnotation(); }
+    }
+
+    private void ArrowStrokeThickness_Checked(object sender, RoutedEventArgs e)
+    {
+        if (double.TryParse(((RadioButton)sender).Tag?.ToString(), out var t))
+        { _arrowStrokeThickness = t; SaveArrowSettings(); RedrawSelectedAnnotation(); }
+    }
+
+    private void ArrowShadow_Checked(object sender, RoutedEventArgs e)
+    {
+        if (double.TryParse(((RadioButton)sender).Tag?.ToString(), out var t))
+        { _arrowShadow = t; SaveArrowSettings(); RedrawSelectedAnnotation(); }
+    }
+
+    // ── Settings persistence ──────────────────────────────────────────────────
+
+    private const string EditorRegKey = @"Software\Capturius\Editor";
+
+    private void LoadArrowSettings()
+    {
+        using var key = Registry.CurrentUser.OpenSubKey(EditorRegKey);
+        if (key == null) return;
+
+        _arrowFillColor   = ParseColor(key.GetValue("ArrowFillColor")   as string, _arrowFillColor);
+        _arrowStrokeColor = ParseColor(key.GetValue("ArrowStrokeColor") as string, _arrowStrokeColor);
+        if (int.TryParse(key.GetValue("ArrowThickness")?.ToString(),       out var t))  _arrowThickness       = t;
+        if (int.TryParse(key.GetValue("ArrowStrokeThickness")?.ToString(), out var st)) _arrowStrokeThickness = st;
+        if (int.TryParse(key.GetValue("ArrowShadow")?.ToString(),          out var sh)) _arrowShadow          = sh;
+    }
+
+    private void SaveArrowSettings()
+    {
+        using var key = Registry.CurrentUser.CreateSubKey(EditorRegKey);
+        key.SetValue("ArrowFillColor",       ColorToString(_arrowFillColor));
+        key.SetValue("ArrowStrokeColor",     ColorToString(_arrowStrokeColor));
+        key.SetValue("ArrowThickness",       (int)_arrowThickness);
+        key.SetValue("ArrowStrokeThickness", (int)_arrowStrokeThickness);
+        key.SetValue("ArrowShadow",          (int)_arrowShadow);
+    }
+
+    private void ApplyArrowRadioSelections()
+    {
+        SelectRadio("ArrowThickness",       (int)_arrowThickness);
+        SelectRadio("ArrowStrokeThickness", (int)_arrowStrokeThickness);
+        SelectRadio("ArrowShadow",          (int)_arrowShadow);
+    }
+
+    private void SelectRadio(string groupName, int value)
+    {
+        string tag = value.ToString();
+        foreach (UIElement child in ArrowProperties.Children)
+            if (child is RadioButton rb && rb.GroupName == groupName)
+                rb.IsChecked = rb.Tag?.ToString() == tag;
+    }
+
+    private static string ColorToString(Color c) => $"{c.A},{c.R},{c.G},{c.B}";
+
+    private static Color ParseColor(string? s, Color fallback)
+    {
+        if (s == null) return fallback;
+        var p = s.Split(',');
+        if (p.Length == 4 &&
+            byte.TryParse(p[0], out var a) && byte.TryParse(p[1], out var r) &&
+            byte.TryParse(p[2], out var g) && byte.TryParse(p[3], out var b))
+            return Color.FromArgb(a, r, g, b);
+        return fallback;
+    }
+
     // ── Zoom ──────────────────────────────────────────────────────────────────
 
-    private void ZoomIn_Click(object sender, RoutedEventArgs e) => SetZoom(_zoomLevel * 1.25);
+    private void ZoomIn_Click(object sender, RoutedEventArgs e)  => SetZoom(_zoomLevel * 1.25);
     private void ZoomOut_Click(object sender, RoutedEventArgs e) => SetZoom(_zoomLevel / 1.25);
     private void ZoomReset_Click(object sender, RoutedEventArgs e) => SetZoom(1.0);
 
@@ -136,7 +297,6 @@ public partial class EditorWindow : Window
     private void SetZoom(double zoom)
     {
         _zoomLevel = Math.Clamp(zoom, 0.1, 8.0);
-        // Divide by dpiScale: 100% = 1 physical pixel = 1 screen pixel
         ZoomTransform.ScaleX = _zoomLevel / _dpiScale;
         ZoomTransform.ScaleY = _zoomLevel / _dpiScale;
         ZoomLabel.Text = $"{(int)Math.Round(_zoomLevel * 100)}%";
@@ -146,7 +306,21 @@ public partial class EditorWindow : Window
 
     private void Canvas_MouseDown(object sender, MouseButtonEventArgs e)
     {
-        _drawStart = e.GetPosition(AnnotationCanvas);
+        var pos = e.GetPosition(AnnotationCanvas);
+
+        // In Arrow mode — try to select an existing arrow first
+        if (_currentTool == "Arrow")
+        {
+            var hit = HitTestArrow(pos);
+            if (hit != null)
+            {
+                SelectAnnotation(hit);
+                return;
+            }
+        }
+
+        DeselectAnnotation();
+        _drawStart = pos;
         _isDrawing = true;
         AnnotationCanvas.CaptureMouse();
 
@@ -168,7 +342,7 @@ public partial class EditorWindow : Window
 
         _previewElement = _currentTool switch
         {
-            "Arrow" => MakeArrow(_drawStart, cur, _currentColor, _currentThickness),
+            "Arrow" => MakeArrow(_drawStart, cur, _arrowFillColor, _arrowStrokeColor, _arrowThickness, _arrowStrokeThickness, _arrowShadow),
             "Rect"  => MakeRect(_drawStart, cur, _currentColor, _currentThickness),
             "Crop"  => MakeCropPreview(_drawStart, cur),
             _       => null
@@ -203,53 +377,247 @@ public partial class EditorWindow : Window
             return;
         }
 
-        var el = _currentTool switch
+        if (_currentTool == "Arrow")
         {
-            "Arrow" => MakeArrow(_drawStart, cur, _currentColor, _currentThickness),
-            "Rect"  => MakeRect(_drawStart, cur, _currentColor, _currentThickness),
-            _       => null
-        };
-
-        if (el != null)
-        {
+            var el = MakeArrow(_drawStart, cur, _arrowFillColor, _arrowStrokeColor, _arrowThickness, _arrowStrokeThickness, _arrowShadow);
             AnnotationCanvas.Children.Add(el);
-            _annotations.Add(el);
+            _annotations.Add(new Annotation
+            {
+                Tool            = "Arrow",
+                Element         = el,
+                Start           = _drawStart,
+                End             = cur,
+                FillColor       = _arrowFillColor,
+                StrokeColor     = _arrowStrokeColor,
+                Thickness       = _arrowThickness,
+                StrokeThickness = _arrowStrokeThickness,
+                Shadow          = _arrowShadow,
+            });
+            return;
         }
+
+        var other = _currentTool switch
+        {
+            "Rect" => MakeRect(_drawStart, cur, _currentColor, _currentThickness),
+            _      => null
+        };
+        if (other != null)
+        {
+            AnnotationCanvas.Children.Add(other);
+            _annotations.Add(new Annotation { Tool = _currentTool, Element = other });
+        }
+    }
+
+    // ── Selection ─────────────────────────────────────────────────────────────
+
+    private Annotation? HitTestArrow(Point pos)
+    {
+        Annotation? found = null;
+        VisualTreeHelper.HitTest(
+            AnnotationCanvas,
+            null,
+            result =>
+            {
+                var ann = FindAnnotationByVisual(result.VisualHit);
+                if (ann?.Tool == "Arrow") { found = ann; return HitTestResultBehavior.Stop; }
+                return HitTestResultBehavior.Continue;
+            },
+            new PointHitTestParameters(pos));
+        return found;
+    }
+
+    private Annotation? FindAnnotationByVisual(DependencyObject visual)
+    {
+        DependencyObject? current = visual;
+        while (current != null && !ReferenceEquals(current, AnnotationCanvas))
+        {
+            if (current is UIElement el)
+            {
+                var ann = _annotations.FirstOrDefault(a => ReferenceEquals(a.Element, el));
+                if (ann != null) return ann;
+            }
+            current = VisualTreeHelper.GetParent(current);
+        }
+        return null;
+    }
+
+    private void SelectAnnotation(Annotation ann)
+    {
+        DeselectAnnotation();
+        _selectedAnnotation = ann;
+
+        _arrowFillColor       = ann.FillColor;
+        _arrowStrokeColor     = ann.StrokeColor;
+        _arrowThickness       = ann.Thickness;
+        _arrowStrokeThickness = ann.StrokeThickness;
+        _arrowShadow          = ann.Shadow;
+
+        UpdatePickerSelection(ArrowFillPicker,   ann.FillColor);
+        UpdatePickerSelection(ArrowStrokePicker, ann.StrokeColor);
+        ApplyArrowRadioSelections();
+
+        ShowHandles(ann);
+    }
+
+    private void DeselectAnnotation()
+    {
+        _selectedAnnotation = null;
+        HideHandles();
+    }
+
+    private void DeleteAnnotation(Annotation ann)
+    {
+        DeselectAnnotation();
+        AnnotationCanvas.Children.Remove(ann.Element);
+        _annotations.Remove(ann);
+    }
+
+    private void ShowHandles(Annotation ann)
+    {
+        HideHandles();
+        foreach (var pt in new[] { ann.Start, ann.End })
+        {
+            var handle = new Ellipse
+            {
+                Width = 8, Height = 8,
+                Fill = Brushes.White,
+                Stroke = new SolidColorBrush(Color.FromRgb(0x89, 0xB4, 0xFA)),
+                StrokeThickness = 1.5,
+                IsHitTestVisible = false,
+            };
+            Canvas.SetLeft(handle, pt.X - 4);
+            Canvas.SetTop(handle, pt.Y - 4);
+            AnnotationCanvas.Children.Add(handle);
+            _selectionHandles.Add(handle);
+        }
+    }
+
+    private void HideHandles()
+    {
+        foreach (var h in _selectionHandles)
+            AnnotationCanvas.Children.Remove(h);
+        _selectionHandles.Clear();
+    }
+
+    private void RedrawSelectedAnnotation()
+    {
+        if (_selectedAnnotation?.Tool != "Arrow") return;
+        var ann = _selectedAnnotation;
+
+        ann.FillColor       = _arrowFillColor;
+        ann.StrokeColor     = _arrowStrokeColor;
+        ann.Thickness       = _arrowThickness;
+        ann.StrokeThickness = _arrowStrokeThickness;
+        ann.Shadow          = _arrowShadow;
+
+        int idx = AnnotationCanvas.Children.IndexOf(ann.Element);
+        AnnotationCanvas.Children.Remove(ann.Element);
+
+        var newEl = MakeArrow(ann.Start, ann.End, ann.FillColor, ann.StrokeColor, ann.Thickness, ann.StrokeThickness, ann.Shadow);
+        ann.Element = newEl;
+
+        if (idx >= 0)
+            AnnotationCanvas.Children.Insert(idx, newEl);
+        else
+            AnnotationCanvas.Children.Add(newEl);
+
+        ShowHandles(ann);
     }
 
     // ── Shape factories ───────────────────────────────────────────────────────
 
-    private static UIElement MakeArrow(Point start, Point end, Color color, double thickness)
+    private static UIElement MakeArrow(Point start, Point end, Color fillColor, Color strokeColor, double thickness, double strokeThickness, double shadow)
     {
         var dir = end - start;
         var len = Math.Sqrt(dir.X * dir.X + dir.Y * dir.Y);
-        if (len < 2) return new Path();
+        if (len < 4) return new Path();
 
         dir /= len;
         var perp = new Vector(-dir.Y, dir.X);
-        double aLen = Math.Min(16 + thickness * 2, len * 0.4);
-        double aWid = aLen * 0.45;
 
-        var p1 = end - dir * aLen + perp * aWid;
-        var p2 = end - dir * aLen - perp * aWid;
+        double headWid = thickness * 4.5 + 6;
+        double bodyWid = thickness * 2.2 + 2;
+        double headLen = Math.Min(len * 0.638, headWid * 2.016);
+        var tip      = end;
+        var hBase    = end - dir * headLen;
+        var bodyBase = end - dir * (headLen * 0.85);
 
-        var fig = new PathFigure { StartPoint = end, IsClosed = true };
-        fig.Segments.Add(new LineSegment(p1, true));
-        fig.Segments.Add(new LineSegment(p2, true));
-        var arrowHead = new PathGeometry();
-        arrowHead.Figures.Add(fig);
-
-        var group = new GeometryGroup();
-        group.Children.Add(new LineGeometry(start, end));
-        group.Children.Add(arrowHead);
-
-        return new Path
-        {
-            Data = group,
-            Stroke = new SolidColorBrush(color),
-            StrokeThickness = thickness,
-            Fill = new SolidColorBrush(color),
+        Point[] poly = {
+            tip,
+            hBase    + perp * headWid,
+            bodyBase + perp * (bodyWid * 1.1),
+            start,
+            bodyBase - perp * (bodyWid * 1.1),
+            hBase    - perp * headWid,
         };
+        bool[] round = { true, true, false, true, false, true };
+
+        var geo = new PathGeometry();
+        geo.Figures.Add(RoundedPolygon(poly, round, 1.0));
+
+        System.Windows.Media.Effects.DropShadowEffect? shadowEffect = shadow > 0
+            ? new System.Windows.Media.Effects.DropShadowEffect
+              {
+                  BlurRadius  = shadow,
+                  ShadowDepth = shadow * 0.4,
+                  Direction   = 315,
+                  Color       = Colors.Black,
+                  Opacity     = 0.5,
+              }
+            : null;
+
+        if (strokeThickness == 0)
+            return new Path { Data = geo, Fill = new SolidColorBrush(fillColor), Effect = shadowEffect };
+
+        var bgPath = new Path
+        {
+            Data            = geo,
+            Fill            = new SolidColorBrush(strokeColor),
+            Stroke          = new SolidColorBrush(strokeColor),
+            StrokeThickness = strokeThickness * 2,
+            StrokeLineJoin  = PenLineJoin.Round,
+        };
+        var fgPath = new Path { Data = geo, Fill = new SolidColorBrush(fillColor) };
+        var container = new Grid { Effect = shadowEffect };
+        container.Children.Add(bgPath);
+        container.Children.Add(fgPath);
+        return container;
+    }
+
+    private static PathFigure RoundedPolygon(Point[] pts, bool[] round, double r)
+    {
+        int n = pts.Length;
+
+        Vector EdgeDir(int from, int to)
+        {
+            var d = pts[to] - pts[from];
+            var l = Math.Sqrt(d.X * d.X + d.Y * d.Y);
+            return l > 0 ? d / l : new Vector(0, 0);
+        }
+
+        Point ArcStart(int i) => pts[i] - EdgeDir((i - 1 + n) % n, i) * r;
+        Point ArcEnd(int i)   => pts[i] + EdgeDir(i, (i + 1) % n) * r;
+
+        var startPt = round[0] ? ArcEnd(0) : pts[0];
+        var fig = new PathFigure { StartPoint = startPt, IsClosed = false };
+
+        for (int i = 0; i < n; i++)
+        {
+            int next   = (i + 1) % n;
+            var target = round[next] ? ArcEnd(next) : pts[next];
+
+            if (round[next])
+            {
+                fig.Segments.Add(new LineSegment(ArcStart(next), true));
+                fig.Segments.Add(new QuadraticBezierSegment(pts[next], target, true));
+            }
+            else
+            {
+                fig.Segments.Add(new LineSegment(target, true));
+            }
+        }
+
+        return fig;
     }
 
     private static UIElement MakeRect(Point start, Point end, Color color, double thickness)
@@ -302,7 +670,8 @@ public partial class EditorWindow : Window
         Canvas.SetLeft(tb, position.X);
         Canvas.SetTop(tb, position.Y);
         AnnotationCanvas.Children.Add(tb);
-        _annotations.Add(tb);
+        var ann = new Annotation { Tool = "Text", Element = tb };
+        _annotations.Add(ann);
         tb.Focus();
 
         tb.KeyDown += (_, e) =>
@@ -312,7 +681,7 @@ public partial class EditorWindow : Window
                 if (string.IsNullOrWhiteSpace(tb.Text))
                 {
                     AnnotationCanvas.Children.Remove(tb);
-                    _annotations.Remove(tb);
+                    _annotations.Remove(ann);
                 }
                 else
                 {
@@ -341,17 +710,17 @@ public partial class EditorWindow : Window
 
         int x = Math.Max(0, (int)_cropRect.X);
         int y = Math.Max(0, (int)_cropRect.Y);
-        int w = Math.Min((int)_cropRect.Width, _bitmapSource.PixelWidth - x);
+        int w = Math.Min((int)_cropRect.Width,  _bitmapSource.PixelWidth  - x);
         int h = Math.Min((int)_cropRect.Height, _bitmapSource.PixelHeight - y);
 
         if (w <= 0 || h <= 0) return;
 
         _bitmapSource = new CroppedBitmap(_bitmapSource, new Int32Rect(x, y, w, h));
         MainImage.Source = _bitmapSource;
-        AnnotationCanvas.Width = w;
+        AnnotationCanvas.Width  = w;
         AnnotationCanvas.Height = h;
 
-        // Clear all annotations after crop
+        DeselectAnnotation();
         AnnotationCanvas.Children.Clear();
         _annotations.Clear();
         _cropBorder = null;
@@ -366,8 +735,9 @@ public partial class EditorWindow : Window
     {
         if (_annotations.Count == 0) return;
         var last = _annotations[^1];
+        if (ReferenceEquals(last, _selectedAnnotation)) DeselectAnnotation();
         _annotations.RemoveAt(_annotations.Count - 1);
-        AnnotationCanvas.Children.Remove(last);
+        AnnotationCanvas.Children.Remove(last.Element);
     }
 
     // ── Save / Copy ───────────────────────────────────────────────────────────
@@ -379,14 +749,16 @@ public partial class EditorWindow : Window
 
         var rtb = new RenderTargetBitmap(w, h, 96, 96, PixelFormats.Pbgra32);
 
-        // Render source image directly — bypasses Margin/ScaleTransform/ScrollViewer
         var imgVisual = new DrawingVisual();
         using (var dc = imgVisual.RenderOpen())
             dc.DrawImage(_bitmapSource, new Rect(0, 0, w, h));
         rtb.Render(imgVisual);
 
-        // Render annotation canvas on top (Width/Height = PixelWidth/PixelHeight)
+        // Hide handles before rendering, then restore
+        var handles = _selectionHandles.ToList();
+        foreach (var handle in handles) AnnotationCanvas.Children.Remove(handle);
         rtb.Render(AnnotationCanvas);
+        foreach (var handle in handles) AnnotationCanvas.Children.Add(handle);
 
         return rtb;
     }

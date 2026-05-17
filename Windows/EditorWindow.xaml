@@ -128,104 +128,203 @@
 
     <DockPanel>
         <!-- Toolbar -->
-        <Border DockPanel.Dock="Top" Background="#181825" Padding="8,4" BorderThickness="0,0,0,1" BorderBrush="#313244">
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+        <Border DockPanel.Dock="Top" Background="#181825" BorderThickness="0,0,0,1" BorderBrush="#313244">
+            <StackPanel Orientation="Vertical">
 
-                <!-- Tools -->
-                <ToggleButton x:Name="BtnArrow" Style="{StaticResource ToolBtn}"
-                              Checked="Tool_Checked" Tag="Arrow" IsChecked="True" ToolTip="Arrow">
-                    <Viewbox Width="16" Height="16">
-                        <Path Data="M4,2 L4,17 L7.5,13.5 L10.5,20 L12.5,19 L9.5,12.5 L14.5,12.5 Z" Fill="#CDD6F4"/>
-                    </Viewbox>
-                </ToggleButton>
-                <ToggleButton x:Name="BtnRect"  Style="{StaticResource ToolBtn}"
-                              Checked="Tool_Checked" Tag="Rect" Margin="2,0,0,0" ToolTip="Rectangle">
-                    <Viewbox Width="16" Height="16">
-                        <Path Data="M4,4H20V20H4V4M6,6V18H18V6H6Z" Fill="#CDD6F4"/>
-                    </Viewbox>
-                </ToggleButton>
-                <ToggleButton x:Name="BtnText"  Style="{StaticResource ToolBtn}"
-                              Checked="Tool_Checked" Tag="Text" Margin="2,0,0,0" ToolTip="Text">
-                    <Viewbox Width="16" Height="16">
-                        <Path Data="M5,4V7H11V19H13V7H19V4H5Z" Fill="#CDD6F4"/>
-                    </Viewbox>
-                </ToggleButton>
-                <ToggleButton x:Name="BtnCrop"  Style="{StaticResource ToolBtn}"
-                              Checked="Tool_Checked" Tag="Crop" Margin="2,0,0,0" ToolTip="Crop">
-                    <Viewbox Width="16" Height="16">
-                        <Path Data="M7,17H5V5A2,2 0 0,1 7,3H19V5H7V17M17,7H19V19A2,2 0 0,1 17,21H5V19H17V7Z" Fill="#CDD6F4"/>
-                    </Viewbox>
-                </ToggleButton>
+                <!-- Row 1: Tools (left) | Zoom (center) | Copy+Save (right) -->
+                <Grid Margin="8,4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
 
-                <Separator Style="{StaticResource Sep}"/>
+                    <!-- Left: Tools + Undo -->
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                        <ToggleButton x:Name="BtnArrow" Style="{StaticResource ToolBtn}"
+                                      Checked="Tool_Checked" Tag="Arrow" IsChecked="True" ToolTip="Arrow">
+                            <Viewbox Width="16" Height="16">
+                                <Path Fill="Transparent" Stroke="#CDD6F4" StrokeThickness="3"
+                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                                      Data="M35.127 32.441c1.196 1.609 3.44 1.272 4.145-.606 1.732-4.61 3.077-10.102 4.002-14.526a3.863 3.863 0 0 0-2.578-4.465c-4.315-1.42-9.777-3.01-14.654-3.81-1.957-.321-3.353 1.414-2.569 3.236.614 1.427 1.496 3.304 2.756 5.692-2.602 1.282-6.049 3.09-10.323 5.557-4.28 2.471-7.57 4.553-9.982 6.166l5.37 9.282a174 174 0 0 0 10.339-5.528 174 174 0 0 0 9.963-6.194c1.42 2.25 2.6 3.944 3.53 5.196"/>
+                            </Viewbox>
+                        </ToggleButton>
+                        <ToggleButton x:Name="BtnRect"  Style="{StaticResource ToolBtn}"
+                                      Checked="Tool_Checked" Tag="Rect" Margin="2,0,0,0" ToolTip="Rectangle">
+                            <Viewbox Width="16" Height="16">
+                                <Path Data="M4,4H20V20H4V4M6,6V18H18V6H6Z" Fill="#CDD6F4"/>
+                            </Viewbox>
+                        </ToggleButton>
+                        <ToggleButton x:Name="BtnText"  Style="{StaticResource ToolBtn}"
+                                      Checked="Tool_Checked" Tag="Text" Margin="2,0,0,0" ToolTip="Text">
+                            <Viewbox Width="16" Height="16">
+                                <Path Data="M5,4V7H11V19H13V7H19V4H5Z" Fill="#CDD6F4"/>
+                            </Viewbox>
+                        </ToggleButton>
+                        <ToggleButton x:Name="BtnCrop"  Style="{StaticResource ToolBtn}"
+                                      Checked="Tool_Checked" Tag="Crop" Margin="2,0,0,0" ToolTip="Crop">
+                            <Viewbox Width="16" Height="16">
+                                <Path Data="M7,17H5V5A2,2 0 0,1 7,3H19V5H7V17M17,7H19V19A2,2 0 0,1 17,21H5V19H17V7Z" Fill="#CDD6F4"/>
+                            </Viewbox>
+                        </ToggleButton>
 
-                <!-- Colors -->
-                <TextBlock Text="Color:" Foreground="#585B70" FontSize="12" FontFamily="Segoe UI"
-                           VerticalAlignment="Center" Margin="0,0,6,0"/>
-                <ItemsControl x:Name="ColorPicker">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <StackPanel Orientation="Horizontal"/>
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                </ItemsControl>
+                        <!-- Crop apply (visible only in crop mode) -->
+                        <Button x:Name="BtnApplyCrop" Style="{StaticResource ActionBtn}"
+                                Click="ApplyCrop_Click" Margin="4,0,0,0" Visibility="Collapsed" ToolTip="Apply crop">
+                            <Viewbox Width="16" Height="16">
+                                <Path Data="M9,20.42L2.79,14.2L5.62,11.38L9,14.77L18.88,4.88L21.71,7.71L9,20.42Z" Fill="#CDD6F4"/>
+                            </Viewbox>
+                        </Button>
+                    </StackPanel>
 
-                <Separator Style="{StaticResource Sep}"/>
+                    <!-- Center: Zoom -->
+                    <StackPanel Grid.Column="1" Orientation="Horizontal"
+                                HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <Button Style="{StaticResource ActionBtn}" Content="&#x2212;" Width="30" Padding="0,6" Click="ZoomOut_Click" ToolTip="Zoom out"/>
+                        <TextBlock x:Name="ZoomLabel" Foreground="#CDD6F4" FontSize="12" FontFamily="Segoe UI"
+                                   VerticalAlignment="Center" Margin="6,0" Width="38" TextAlignment="Center"/>
+                        <Button Style="{StaticResource ActionBtn}" Content="+" Width="30" Padding="0,6" Click="ZoomIn_Click" ToolTip="Zoom in"/>
+                        <Button Style="{StaticResource ActionBtn}" Content="1:1" Click="ZoomReset_Click"
+                                ToolTip="Reset zoom" Margin="4,0,0,0"/>
+                    </StackPanel>
 
-                <!-- Thickness -->
-                <TextBlock Text="Size:" Foreground="#585B70" FontSize="12" FontFamily="Segoe UI"
-                           VerticalAlignment="Center" Margin="0,0,6,0"/>
-                <RadioButton x:Name="Thick1" Style="{StaticResource ThickBtn}" Content="1" IsChecked="True"
-                             Checked="Thickness_Checked" Tag="1"/>
-                <RadioButton x:Name="Thick2" Style="{StaticResource ThickBtn}" Content="2"
-                             Checked="Thickness_Checked" Tag="2" Margin="2,0,0,0"/>
-                <RadioButton x:Name="Thick3" Style="{StaticResource ThickBtn}" Content="3"
-                             Checked="Thickness_Checked" Tag="3" Margin="2,0,0,0"/>
-                <RadioButton x:Name="Thick5" Style="{StaticResource ThickBtn}" Content="5"
-                             Checked="Thickness_Checked" Tag="5" Margin="2,0,0,0"/>
+                    <!-- Right: Undo + Copy + Save -->
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button Style="{StaticResource ActionBtn}" Click="Undo_Click"
+                                ToolTip="Undo last action" Margin="0,0,4,0">
+                            <Viewbox Width="16" Height="16">
+                                <Canvas Width="48" Height="48">
+                                    <Path Stroke="#CDD6F4" StrokeThickness="3" StrokeLineJoin="Round" Fill="Transparent"
+                                          Data="m 20.749609,34.24017 c 1.787911,0.267434 2.987579,-1.202238 2.341655,-2.890732 a 91.73,91.73 0 0 0 -1.827584,-4.37781 c 1.21242,-0.686692 2.315976,-1.239367 3.264429,-1.673618 2.061562,-0.946051 4.412161,-0.305747 5.955838,1.355061 l 6.145858,6.606039 c 0.745944,0.802877 1.803631,1.258454 2.847744,0.927011 0.423749,-0.13372 0.916476,-0.322557 1.470504,-0.587225 0.532372,-0.254323 0.974414,-0.509823 1.336039,-0.745747 0.913814,-0.597238 1.099657,-1.75326 0.647894,-2.747652 C 41.216547,26.331303 39.070197,22.566803 37.083156,19.37009 33.904619,14.254558 27.274609,12.905708 21.80244,15.421214 a 99.557,99.557 0 0 1 -5.04491,2.161784 86.76,86.76 0 0 0 -1.967521,-3.610548 c -0.907167,-1.562586 -2.804282,-1.552877 -3.72064,0.0064 -0.820426,1.398218 -1.9059876,3.387452 -3.2367946,6.129977 -1.6480198,3.393882 -2.4139832,5.718068 -2.7666283,7.195372 -0.3222313,1.353058 0.2890046,2.632556 1.5436076,3.231228 1.3721307,0.654461 3.6605393,1.519525 7.3358103,2.369281 2.97101,0.688589 5.200121,1.09546 6.804245,1.335434 z"/>
+                                </Canvas>
+                            </Viewbox>
+                        </Button>
+                        <Button Style="{StaticResource ActionBtn}" Click="Copy_Click"
+                                ToolTip="Copy to clipboard" Margin="0,0,4,0">
+                            <Viewbox Width="16" Height="16">
+                                <Canvas Width="48" Height="48">
+                                    <Path Stroke="#CDD6F4" StrokeThickness="3" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"
+                                          Data="M33.533 40.47c-.214 2.206-1.854 3.86-4.058 4.09-2.182.226-5.44.44-9.975.44s-7.793-.214-9.975-.44c-2.204-.23-3.844-1.884-4.058-4.09C5.231 38.034 5 34.196 5 28.5c0-5.695.231-9.534.467-11.97.214-2.206 1.854-3.86 4.058-4.09"/>
+                                    <Path Stroke="#CDD6F4" StrokeThickness="3" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"
+                                          Data="M31.791 3.04c.612.179 3.018 1.06 6.563 4.592 3.317 3.304 4.305 5.615 4.566 6.398.05 1.595.08 3.411.08 5.47 0 5.695-.231 9.534-.467 11.97-.214 2.206-1.854 3.86-4.058 4.09-2.182.226-5.44.44-9.975.44s-7.793-.214-9.975-.44c-2.204-.23-3.844-1.884-4.058-4.09C14.231 29.034 14 25.195 14 19.5s.231-9.534.467-11.97c.214-2.206 1.854-3.86 4.058-4.09C20.707 3.214 23.965 3 28.5 3q1.773.001 3.291.04"/>
+                                    <Path Stroke="#CDD6F4" StrokeThickness="3" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"
+                                          Data="M42.901 14.338c-1.67.254-4.58.09-6.953-.119a4.626 4.626 0 0 1-4.214-4.21c-.211-2.378-.374-5.294-.112-6.95"/>
+                                </Canvas>
+                            </Viewbox>
+                        </Button>
+                        <Button Style="{StaticResource PrimaryBtn}" Click="Save_Click" ToolTip="Save file">
+                            <Viewbox Width="16" Height="16">
+                                <Canvas Width="48" Height="48">
+                                    <Path Stroke="White" StrokeThickness="3" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"
+                                          Data="M36.756 4.347a5.56 5.56 0 0 0-3.234-1.172A242 242 0 0 0 24 3c-7.364 0-12.515.277-15.743.539-2.555.208-4.51 2.163-4.718 4.718C3.277 11.485 3 16.636 3 24s.277 12.515.539 15.743c.208 2.555 2.163 4.51 4.718 4.718C11.485 44.723 16.636 45 24 45s12.515-.277 15.743-.539c2.555-.208 4.51-2.163 4.718-4.718C44.723 36.515 45 31.364 45 24c0-3.729-.071-6.89-.175-9.522a5.56 5.56 0 0 0-1.173-3.234c-.86-1.09-1.988-2.428-3.229-3.668-1.24-1.24-2.578-2.368-3.667-3.229"/>
+                                    <Path Stroke="White" StrokeThickness="3" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"
+                                          Data="M31.293 3.1c.034.705.056 1.544.056 2.526a52 52 0 0 1-.064 2.687c-.088 1.694-1.412 2.938-3.107 3.01-1.063.044-2.446.078-4.179.078s-3.115-.034-4.178-.079c-1.695-.07-3.019-1.315-3.107-3.009a52 52 0 0 1-.065-2.687c0-.982.023-1.821.057-2.526"/>
+                                    <Path Stroke="White" StrokeThickness="3" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"
+                                          Data="M36.362 44.69c.126-2.013.237-4.851.237-8.615 0-4.47-.156-7.635-.31-9.662-.128-1.704-1.425-3.013-3.128-3.15-1.95-.156-4.953-.313-9.162-.313s-7.212.157-9.161.314c-1.704.136-3 1.445-3.129 3.15-.153 2.026-.31 5.191-.31 9.661 0 3.764.111 6.602.238 8.615"/>
+                                    <Path Stroke="White" StrokeThickness="3" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Data="M19 31h10"/>
+                                    <Path Stroke="White" StrokeThickness="3" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Data="M19 37h6"/>
+                                </Canvas>
+                            </Viewbox>
+                        </Button>
+                    </StackPanel>
+                </Grid>
 
-                <Separator Style="{StaticResource Sep}"/>
+                <!-- Row 2: Tool properties -->
+                <Border Background="#11111B" BorderThickness="0,1,0,0" BorderBrush="#313244" Padding="8,4">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
 
-                <!-- Zoom -->
-                <Button Style="{StaticResource ActionBtn}" Content="−" Width="30" Click="ZoomOut_Click" ToolTip="Zoom out"/>
-                <TextBlock x:Name="ZoomLabel" Foreground="#CDD6F4" FontSize="12" FontFamily="Segoe UI"
-                           VerticalAlignment="Center" Margin="6,0" Width="38" TextAlignment="Center"/>
-                <Button Style="{StaticResource ActionBtn}" Content="+" Width="30" Click="ZoomIn_Click" ToolTip="Zoom in"/>
-                <Button Style="{StaticResource ActionBtn}" Content="1:1" Click="ZoomReset_Click"
-                        ToolTip="Reset zoom" Margin="4,0,0,0"/>
+                        <!-- Global tool properties (Rectangle, Text, Crop) -->
+                        <StackPanel x:Name="GlobalProperties" Orientation="Horizontal" VerticalAlignment="Center" Visibility="Collapsed">
+                            <TextBlock Text="Color:" Foreground="#585B70" FontSize="12" FontFamily="Segoe UI"
+                                       VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <ItemsControl x:Name="ColorPicker">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                            </ItemsControl>
+                            <TextBlock Text="Size:" Foreground="#585B70" FontSize="12" FontFamily="Segoe UI"
+                                       VerticalAlignment="Center" Margin="10,0,6,0"/>
+                            <RadioButton x:Name="Thick1" Style="{StaticResource ThickBtn}" Content="1" IsChecked="True"
+                                         Checked="Thickness_Checked" Tag="1" GroupName="GlobalThickness"/>
+                            <RadioButton x:Name="Thick2" Style="{StaticResource ThickBtn}" Content="2"
+                                         Checked="Thickness_Checked" Tag="2" GroupName="GlobalThickness" Margin="2,0,0,0"/>
+                            <RadioButton x:Name="Thick3" Style="{StaticResource ThickBtn}" Content="3"
+                                         Checked="Thickness_Checked" Tag="3" GroupName="GlobalThickness" Margin="2,0,0,0"/>
+                            <RadioButton x:Name="Thick5" Style="{StaticResource ThickBtn}" Content="5"
+                                         Checked="Thickness_Checked" Tag="5" GroupName="GlobalThickness" Margin="2,0,0,0"/>
+                        </StackPanel>
 
-                <Separator Style="{StaticResource Sep}"/>
+                        <!-- Arrow tool properties -->
+                        <StackPanel x:Name="ArrowProperties" Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="Fill:" Foreground="#585B70" FontSize="12" FontFamily="Segoe UI"
+                                       VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <ItemsControl x:Name="ArrowFillPicker">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                            </ItemsControl>
+                            <TextBlock Text="Size:" Foreground="#585B70" FontSize="12" FontFamily="Segoe UI"
+                                       VerticalAlignment="Center" Margin="10,0,6,0"/>
+                            <RadioButton Style="{StaticResource ThickBtn}" Content="1"
+                                         Checked="ArrowThickness_Checked" Tag="1" GroupName="ArrowThickness"/>
+                            <RadioButton Style="{StaticResource ThickBtn}" Content="2" IsChecked="True"
+                                         Checked="ArrowThickness_Checked" Tag="2" GroupName="ArrowThickness" Margin="2,0,0,0"/>
+                            <RadioButton Style="{StaticResource ThickBtn}" Content="3"
+                                         Checked="ArrowThickness_Checked" Tag="3" GroupName="ArrowThickness" Margin="2,0,0,0"/>
+                            <RadioButton Style="{StaticResource ThickBtn}" Content="5"
+                                         Checked="ArrowThickness_Checked" Tag="5" GroupName="ArrowThickness" Margin="2,0,0,0"/>
+                            <RadioButton Style="{StaticResource ThickBtn}" Content="7"
+                                         Checked="ArrowThickness_Checked" Tag="7" GroupName="ArrowThickness" Margin="2,0,0,0"/>
+                            <RadioButton Style="{StaticResource ThickBtn}" Content="10"
+                                         Checked="ArrowThickness_Checked" Tag="10" GroupName="ArrowThickness" Margin="2,0,0,0"/>
+                            <RadioButton Style="{StaticResource ThickBtn}" Content="15"
+                                         Checked="ArrowThickness_Checked" Tag="15" GroupName="ArrowThickness" Margin="2,0,0,0"/>
+                            <TextBlock Text="Stroke:" Foreground="#585B70" FontSize="12" FontFamily="Segoe UI"
+                                       VerticalAlignment="Center" Margin="20,0,6,0"/>
+                            <ItemsControl x:Name="ArrowStrokePicker">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                            </ItemsControl>
+                            <TextBlock Text="Thickness:" Foreground="#585B70" FontSize="12" FontFamily="Segoe UI"
+                                       VerticalAlignment="Center" Margin="10,0,6,0"/>
+                            <RadioButton Style="{StaticResource ThickBtn}" Content="0" IsChecked="True"
+                                         Checked="ArrowStrokeThickness_Checked" Tag="0" GroupName="ArrowStrokeThickness"/>
+                            <RadioButton Style="{StaticResource ThickBtn}" Content="1"
+                                         Checked="ArrowStrokeThickness_Checked" Tag="1" GroupName="ArrowStrokeThickness" Margin="2,0,0,0"/>
+                            <RadioButton Style="{StaticResource ThickBtn}" Content="2"
+                                         Checked="ArrowStrokeThickness_Checked" Tag="2" GroupName="ArrowStrokeThickness" Margin="2,0,0,0"/>
+                            <RadioButton Style="{StaticResource ThickBtn}" Content="3"
+                                         Checked="ArrowStrokeThickness_Checked" Tag="3" GroupName="ArrowStrokeThickness" Margin="2,0,0,0"/>
+                            <RadioButton Style="{StaticResource ThickBtn}" Content="5"
+                                         Checked="ArrowStrokeThickness_Checked" Tag="5" GroupName="ArrowStrokeThickness" Margin="2,0,0,0"/>
+                            <TextBlock Text="Shadow:" Foreground="#585B70" FontSize="12" FontFamily="Segoe UI"
+                                       VerticalAlignment="Center" Margin="20,0,6,0"/>
+                            <RadioButton Style="{StaticResource ThickBtn}" Content="0" IsChecked="True"
+                                         Checked="ArrowShadow_Checked" Tag="0" GroupName="ArrowShadow"/>
+                            <RadioButton Style="{StaticResource ThickBtn}" Content="1"
+                                         Checked="ArrowShadow_Checked" Tag="1" GroupName="ArrowShadow" Margin="2,0,0,0"/>
+                            <RadioButton Style="{StaticResource ThickBtn}" Content="3"
+                                         Checked="ArrowShadow_Checked" Tag="3" GroupName="ArrowShadow" Margin="2,0,0,0"/>
+                            <RadioButton Style="{StaticResource ThickBtn}" Content="5"
+                                         Checked="ArrowShadow_Checked" Tag="5" GroupName="ArrowShadow" Margin="2,0,0,0"/>
+                            <RadioButton Style="{StaticResource ThickBtn}" Content="7"
+                                         Checked="ArrowShadow_Checked" Tag="7" GroupName="ArrowShadow" Margin="2,0,0,0"/>
+                            <RadioButton Style="{StaticResource ThickBtn}" Content="10"
+                                         Checked="ArrowShadow_Checked" Tag="10" GroupName="ArrowShadow" Margin="2,0,0,0"/>
+                            <RadioButton Style="{StaticResource ThickBtn}" Content="15"
+                                         Checked="ArrowShadow_Checked" Tag="15" GroupName="ArrowShadow" Margin="2,0,0,0"/>
+                        </StackPanel>
 
-                <!-- Actions -->
-                <Button Style="{StaticResource ActionBtn}" Click="Undo_Click"
-                        ToolTip="Undo last action" Margin="0,0,4,0">
-                    <Viewbox Width="16" Height="16">
-                        <Path Data="M12.5,8C10.65,8 8.59,8.68 7.16,10L5,8V14H11L8.84,11.84C9.87,10.97 11.17,10.5 12.5,10.5C15.04,10.5 17.22,12.17 17.96,14.5L20.35,13.79C19.33,10.62 16.35,8 12.5,8Z" Fill="#CDD6F4"/>
-                    </Viewbox>
-                </Button>
+                    </StackPanel>
+                </Border>
 
-                <!-- Crop apply (visible only in crop mode) -->
-                <Button x:Name="BtnApplyCrop" Style="{StaticResource ActionBtn}"
-                        Click="ApplyCrop_Click" Margin="0,0,4,0" Visibility="Collapsed" ToolTip="Apply crop">
-                    <Viewbox Width="16" Height="16">
-                        <Path Data="M9,20.42L2.79,14.2L5.62,11.38L9,14.77L18.88,4.88L21.71,7.71L9,20.42Z" Fill="#CDD6F4"/>
-                    </Viewbox>
-                </Button>
-
-                <!-- Spacer -->
-                <Grid HorizontalAlignment="Right" Width="20"/>
-
-                <Button Style="{StaticResource ActionBtn}" Click="Copy_Click"
-                        ToolTip="Copy to clipboard" Margin="0,0,4,0">
-                    <Viewbox Width="16" Height="16">
-                        <Path Data="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z" Fill="#CDD6F4"/>
-                    </Viewbox>
-                </Button>
-                <Button Style="{StaticResource PrimaryBtn}" Click="Save_Click" ToolTip="Save file">
-                    <Viewbox Width="16" Height="16">
-                        <Path Data="M15,9H5V5H15M12,19A3,3 0 0,1 9,16A3,3 0 0,1 12,13A3,3 0 0,1 15,16A3,3 0 0,1 12,19M17,3H5C3.89,3 3,3.9 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V7L17,3Z" Fill="White"/>
-                    </Viewbox>
-                </Button>
             </StackPanel>
         </Border>
 
