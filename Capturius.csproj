@@ -9,6 +9,7 @@
     <UseWindowsForms>true</UseWindowsForms>
     <AssemblyName>Capturius</AssemblyName>
     <RootNamespace>Capturius</RootNamespace>
+    <ApplicationIcon>app-icon.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
