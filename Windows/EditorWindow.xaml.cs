@@ -26,13 +26,15 @@ public partial class EditorWindow : Window
         public double Thickness       { get; set; }
         public double StrokeThickness { get; set; }
         public double Shadow          { get; set; }
+        public double CornerRadius    { get; set; }
+        public double Opacity         { get; set; } = 100;
     }
 
     // ── Fields ────────────────────────────────────────────────────────────────
 
     private BitmapSource _bitmapSource;
     private string _currentTool = "Arrow";
-    private Color  _currentColor = Colors.Red;
+    private Color  _currentColor = Color.FromRgb(0xE0, 0x31, 0x31);
     private double _currentThickness = 1;
     private double _zoomLevel = 1.0;
     private readonly double _dpiScale = ScreenCaptureService.GetDpiScale();
@@ -41,11 +43,19 @@ public partial class EditorWindow : Window
     private bool  _isDrawing;
 
     // Arrow tool state
-    private Color  _arrowFillColor       = Colors.Red;
+    private Color  _arrowFillColor       = Color.FromRgb(0xE0, 0x31, 0x31);
     private Color  _arrowStrokeColor     = Colors.Black;
     private double _arrowThickness       = 2;
     private double _arrowStrokeThickness = 0;
     private double _arrowShadow          = 0;
+
+    // Rect tool state
+    private Color  _rectFillColor       = Colors.Transparent;
+    private Color  _rectBorderColor     = Color.FromRgb(0xE0, 0x31, 0x31);
+    private double _rectBorderThickness = 2;
+    private double _rectCornerRadius    = 0;
+    private double _rectOpacity         = 100;
+    private double _rectShadow          = 0;
 
     // Temporary shape shown while dragging
     private UIElement? _previewElement;
@@ -53,8 +63,16 @@ public partial class EditorWindow : Window
     private readonly List<Annotation> _annotations = new();
 
     // Selection state
-    private Annotation?         _selectedAnnotation;
+    private Annotation?              _selectedAnnotation;
     private readonly List<UIElement> _selectionHandles = new();
+
+    // Drag/resize state
+    private bool   _isDragging;
+    private string _dragMode      = "";   // "move" or "resize"
+    private int    _dragCornerIdx;        // 0=TL, 1=TR, 2=BL, 3=BR
+    private Point  _dragMouseStart;
+    private Point  _dragAnnStart;         // TL of annotation at drag start
+    private Point  _dragAnnEnd;           // BR of annotation at drag start
 
     // Crop selection state
     private System.Windows.Rect _cropRect;
@@ -62,10 +80,10 @@ public partial class EditorWindow : Window
 
     private static readonly (Color Color, string Name)[] ColorPresets =
     [
-        (Colors.Red,    "Red"),
-        (Colors.Blue,   "Blue"),
-        (Colors.Green,  "Green"),
-        (Colors.Yellow, "Yellow"),
+        (Color.FromRgb(0xE0, 0x31, 0x31), "Red"),
+        (Color.FromRgb(0x19, 0x71, 0xC2), "Blue"),
+        (Color.FromRgb(0x2F, 0x9D, 0x43), "Green"),
+        (Color.FromRgb(0xF0, 0x8C, 0x00), "Yellow"),
         (Colors.White,  "White"),
         (Colors.Black,  "Black"),
     ];
@@ -80,11 +98,13 @@ public partial class EditorWindow : Window
         AnnotationCanvas.Height = bitmapSource.PixelHeight;
 
         LoadArrowSettings();
+        LoadRectSettings();
         BuildColorPicker();
         BuildArrowColorPickers();
+        BuildRectColorPickers();
         SetZoom(1.0);
 
-        Loaded += (_, _) => ApplyArrowRadioSelections();
+        Loaded += (_, _) => { ApplyArrowRadioSelections(); ApplyRectRadioSelections(); };
 
         PreviewKeyDown += (_, e) =>
         {
@@ -145,6 +165,62 @@ public partial class EditorWindow : Window
         });
     }
 
+    private void BuildRectColorPickers()
+    {
+        BuildFillColorPickerItems(RectFillPicker, () => _rectFillColor, c =>
+        {
+            _rectFillColor = c;
+            UpdateFillPickerSelection(RectFillPicker, c);
+            SaveRectSettings();
+            RedrawSelectedAnnotation();
+        });
+        BuildColorPickerItems(RectBorderPicker, () => _rectBorderColor, c =>
+        {
+            _rectBorderColor = c;
+            UpdatePickerSelection(RectBorderPicker, c);
+            SaveRectSettings();
+            RedrawSelectedAnnotation();
+        });
+    }
+
+    private void BuildFillColorPickerItems(ItemsControl control, Func<Color> getColor, Action<Color> onSelect)
+    {
+        // "None" swatch (transparent fill)
+        var noneInner = new Grid();
+        noneInner.Children.Add(new Line
+        {
+            X1 = 1, Y1 = 13, X2 = 13, Y2 = 1,
+            Stroke = Brushes.OrangeRed, StrokeThickness = 1.5,
+            StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round,
+            IsHitTestVisible = false,
+        });
+        var noneBtn = new Border
+        {
+            Width = 20, Height = 20,
+            CornerRadius = new CornerRadius(10),
+            Background = new SolidColorBrush(Color.FromRgb(0x31, 0x32, 0x44)),
+            Margin = new Thickness(2, 0, 2, 0),
+            Cursor = Cursors.Hand,
+            ToolTip = "None",
+            BorderThickness = new Thickness(2),
+            BorderBrush = getColor().A == 0 ? Brushes.White : Brushes.Transparent,
+            Tag = Colors.Transparent,
+            Child = noneInner,
+            ClipToBounds = true,
+        };
+        noneBtn.MouseLeftButtonDown += (s, e) => onSelect(Colors.Transparent);
+        control.Items.Add(noneBtn);
+
+        // Regular color swatches
+        BuildColorPickerItems(control, getColor, onSelect);
+    }
+
+    private static void UpdateFillPickerSelection(ItemsControl control, Color selected)
+    {
+        foreach (Border b in control.Items)
+            b.BorderBrush = (Color)b.Tag == selected ? Brushes.White : Brushes.Transparent;
+    }
+
     private void BuildColorPickerItems(ItemsControl control, Func<Color> getColor, Action<Color> onSelect)
     {
         foreach (var (color, name) in ColorPresets)
@@ -185,10 +261,12 @@ public partial class EditorWindow : Window
 
         bool isCrop  = _currentTool == "Crop";
         bool isArrow = _currentTool == "Arrow";
+        bool isRect  = _currentTool == "Rect";
 
-        BtnApplyCrop.Visibility     = isCrop  ? Visibility.Visible   : Visibility.Collapsed;
-        GlobalProperties.Visibility = isArrow ? Visibility.Collapsed : Visibility.Visible;
-        ArrowProperties.Visibility  = isArrow ? Visibility.Visible   : Visibility.Collapsed;
+        BtnApplyCrop.Visibility     = isCrop             ? Visibility.Visible   : Visibility.Collapsed;
+        GlobalProperties.Visibility = (isArrow || isRect) ? Visibility.Collapsed : Visibility.Visible;
+        ArrowProperties.Visibility  = isArrow            ? Visibility.Visible   : Visibility.Collapsed;
+        RectProperties.Visibility   = isRect             ? Visibility.Visible   : Visibility.Collapsed;
 
         if (!isCrop) RemoveCropPreview();
         AnnotationCanvas.Cursor = _currentTool == "Text" ? Cursors.IBeam : Cursors.Cross;
@@ -226,6 +304,30 @@ public partial class EditorWindow : Window
         { _arrowShadow = t; SaveArrowSettings(); RedrawSelectedAnnotation(); }
     }
 
+    private void RectBorderThickness_Checked(object sender, RoutedEventArgs e)
+    {
+        if (double.TryParse(((RadioButton)sender).Tag?.ToString(), out var t))
+        { _rectBorderThickness = t; SaveRectSettings(); RedrawSelectedAnnotation(); }
+    }
+
+    private void RectCornerRadius_Checked(object sender, RoutedEventArgs e)
+    {
+        if (double.TryParse(((RadioButton)sender).Tag?.ToString(), out var t))
+        { _rectCornerRadius = t; SaveRectSettings(); RedrawSelectedAnnotation(); }
+    }
+
+    private void RectOpacity_Checked(object sender, RoutedEventArgs e)
+    {
+        if (double.TryParse(((RadioButton)sender).Tag?.ToString(), out var t))
+        { _rectOpacity = t; SaveRectSettings(); RedrawSelectedAnnotation(); }
+    }
+
+    private void RectShadow_Checked(object sender, RoutedEventArgs e)
+    {
+        if (double.TryParse(((RadioButton)sender).Tag?.ToString(), out var t))
+        { _rectShadow = t; SaveRectSettings(); RedrawSelectedAnnotation(); }
+    }
+
     // ── Settings persistence ──────────────────────────────────────────────────
 
     private const string EditorRegKey = @"Software\Capturius\Editor";
@@ -252,6 +354,30 @@ public partial class EditorWindow : Window
         key.SetValue("ArrowShadow",          (int)_arrowShadow);
     }
 
+    private void LoadRectSettings()
+    {
+        using var key = Registry.CurrentUser.OpenSubKey(EditorRegKey);
+        if (key == null) return;
+
+        _rectFillColor   = ParseColor(key.GetValue("RectFillColor")   as string, _rectFillColor);
+        _rectBorderColor = ParseColor(key.GetValue("RectBorderColor") as string, _rectBorderColor);
+        if (double.TryParse(key.GetValue("RectBorderThickness")?.ToString(), out var bt)) _rectBorderThickness = bt;
+        if (double.TryParse(key.GetValue("RectCornerRadius")?.ToString(),    out var cr)) _rectCornerRadius    = cr;
+        if (double.TryParse(key.GetValue("RectOpacity")?.ToString(),         out var op)) _rectOpacity         = op;
+        if (double.TryParse(key.GetValue("RectShadow")?.ToString(),          out var sh)) _rectShadow          = sh;
+    }
+
+    private void SaveRectSettings()
+    {
+        using var key = Registry.CurrentUser.CreateSubKey(EditorRegKey);
+        key.SetValue("RectFillColor",       ColorToString(_rectFillColor));
+        key.SetValue("RectBorderColor",     ColorToString(_rectBorderColor));
+        key.SetValue("RectBorderThickness", _rectBorderThickness);
+        key.SetValue("RectCornerRadius",    _rectCornerRadius);
+        key.SetValue("RectOpacity",         _rectOpacity);
+        key.SetValue("RectShadow",          _rectShadow);
+    }
+
     private void ApplyArrowRadioSelections()
     {
         SelectRadio("ArrowThickness",       (int)_arrowThickness);
@@ -259,12 +385,21 @@ public partial class EditorWindow : Window
         SelectRadio("ArrowShadow",          (int)_arrowShadow);
     }
 
+    private void ApplyRectRadioSelections()
+    {
+        SelectRadio("RectBorderThickness", (int)_rectBorderThickness);
+        SelectRadio("RectCornerRadius",    (int)_rectCornerRadius);
+        SelectRadio("RectOpacity",         (int)_rectOpacity);
+        SelectRadio("RectShadow",          (int)_rectShadow);
+    }
+
     private void SelectRadio(string groupName, int value)
     {
         string tag = value.ToString();
-        foreach (UIElement child in ArrowProperties.Children)
-            if (child is RadioButton rb && rb.GroupName == groupName)
-                rb.IsChecked = rb.Tag?.ToString() == tag;
+        foreach (var panel in new StackPanel[] { ArrowProperties, RectProperties })
+            foreach (UIElement child in panel.Children)
+                if (child is RadioButton rb && rb.GroupName == groupName)
+                    rb.IsChecked = rb.Tag?.ToString() == tag;
     }
 
     private static string ColorToString(Color c) => $"{c.A},{c.R},{c.G},{c.B}";
@@ -308,12 +443,73 @@ public partial class EditorWindow : Window
     {
         var pos = e.GetPosition(AnnotationCanvas);
 
-        // In Arrow mode — try to select an existing arrow first
-        if (_currentTool == "Arrow")
+        if (_currentTool == "Arrow" || _currentTool == "Rect")
         {
-            var hit = HitTestArrow(pos);
+            // 1a. Check endpoints of selected Arrow → drag endpoint
+            if (_selectedAnnotation?.Tool == "Arrow")
+            {
+                Point[] eps = { _selectedAnnotation.Start, _selectedAnnotation.End };
+                for (int i = 0; i < 2; i++)
+                {
+                    var d = eps[i] - pos;
+                    if (Math.Sqrt(d.X * d.X + d.Y * d.Y) <= 8)
+                    {
+                        _isDragging     = true;
+                        _dragMode       = "resize";
+                        _dragCornerIdx  = i;
+                        _dragMouseStart = pos;
+                        _dragAnnStart   = _selectedAnnotation.Start;
+                        _dragAnnEnd     = _selectedAnnotation.End;
+                        AnnotationCanvas.Cursor = i == 0 ? Cursors.SizeNWSE : Cursors.SizeNESW;
+                        AnnotationCanvas.CaptureMouse();
+                        return;
+                    }
+                }
+            }
+
+            // 1b. Check corner handles of selected Rect → resize
+            if (_selectedAnnotation?.Tool == "Rect")
+            {
+                int ci = FindNearestHandle(pos, _selectedAnnotation, 8);
+                if (ci >= 0)
+                {
+                    _isDragging     = true;
+                    _dragMode       = "resize";
+                    _dragCornerIdx  = ci;
+                    _dragMouseStart = pos;
+                    var r = NormRect(_selectedAnnotation.Start, _selectedAnnotation.End);
+                    _dragAnnStart = new Point(r.Left,  r.Top);
+                    _dragAnnEnd   = new Point(r.Right, r.Bottom);
+                    AnnotationCanvas.Cursor = ci switch
+                    {
+                        0 or 3 => Cursors.SizeNWSE,
+                        1 or 2 => Cursors.SizeNESW,
+                        4 or 6 => Cursors.SizeNS,
+                        5 or 7 => Cursors.SizeWE,
+                        _      => Cursors.Cross,
+                    };
+                    AnnotationCanvas.CaptureMouse();
+                    return;
+                }
+            }
+
+            // 2. Hit-test any annotation
+            var hit = HitTestAnnotation(pos);
             if (hit != null)
             {
+                if (hit == _selectedAnnotation)
+                {
+                    // Move already-selected annotation
+                    _isDragging     = true;
+                    _dragMode       = "move";
+                    _dragMouseStart = pos;
+                    var r = NormRect(hit.Start, hit.End);
+                    _dragAnnStart = hit.Tool == "Rect" ? new Point(r.Left, r.Top)     : hit.Start;
+                    _dragAnnEnd   = hit.Tool == "Rect" ? new Point(r.Right, r.Bottom) : hit.End;
+                    AnnotationCanvas.Cursor = Cursors.SizeAll;
+                    AnnotationCanvas.CaptureMouse();
+                    return;
+                }
                 SelectAnnotation(hit);
                 return;
             }
@@ -334,8 +530,61 @@ public partial class EditorWindow : Window
 
     private void Canvas_MouseMove(object sender, MouseEventArgs e)
     {
-        if (!_isDrawing) return;
         var cur = e.GetPosition(AnnotationCanvas);
+
+        if (_isDragging && _selectedAnnotation != null)
+        {
+            var ann = _selectedAnnotation;
+            if (_dragMode == "move")
+            {
+                var delta = cur - _dragMouseStart;
+                ann.Start = _dragAnnStart + delta;
+                ann.End   = _dragAnnEnd   + delta;
+            }
+            else // resize
+            {
+                if (ann.Tool == "Arrow")
+                {
+                    if (_dragCornerIdx == 0) ann.Start = cur;
+                    else                     ann.End   = cur;
+                }
+                else // Rect
+                {
+                    switch (_dragCornerIdx)
+                    {
+                        // corners
+                        case 0: ann.Start = cur;                                    ann.End = _dragAnnEnd;                           break;
+                        case 1: ann.Start = new Point(_dragAnnStart.X, cur.Y);     ann.End = new Point(cur.X, _dragAnnEnd.Y);       break;
+                        case 2: ann.Start = new Point(cur.X, _dragAnnStart.Y);     ann.End = new Point(_dragAnnEnd.X, cur.Y);       break;
+                        case 3: ann.Start = _dragAnnStart;                          ann.End = cur;                                   break;
+                        // edge midpoints — one axis only
+                        case 4: ann.Start = new Point(_dragAnnStart.X, cur.Y);     ann.End = _dragAnnEnd;                           break; // top
+                        case 5: ann.Start = _dragAnnStart;                          ann.End = new Point(cur.X, _dragAnnEnd.Y);       break; // right
+                        case 6: ann.Start = _dragAnnStart;                          ann.End = new Point(_dragAnnEnd.X, cur.Y);       break; // bottom
+                        case 7: ann.Start = new Point(cur.X, _dragAnnStart.Y);     ann.End = _dragAnnEnd;                           break; // left
+                    }
+                }
+            }
+
+            int idx = AnnotationCanvas.Children.IndexOf(ann.Element);
+            AnnotationCanvas.Children.Remove(ann.Element);
+            ann.Element = ann.Tool == "Rect"
+                ? MakeRect(ann.Start, ann.End, ann.FillColor, ann.StrokeColor, ann.Thickness, ann.CornerRadius, ann.Opacity, ann.Shadow)
+                : MakeArrow(ann.Start, ann.End, ann.FillColor, ann.StrokeColor, ann.Thickness, ann.StrokeThickness, ann.Shadow);
+            if (idx >= 0) AnnotationCanvas.Children.Insert(idx, ann.Element);
+            else          AnnotationCanvas.Children.Add(ann.Element);
+            ShowHandles(ann);
+            return;
+        }
+
+        // Cursor update while hovering (not drawing, not dragging)
+        if (!_isDrawing && (_currentTool == "Arrow" || _currentTool == "Rect"))
+        {
+            AnnotationCanvas.Cursor = HoverCursor(cur);
+            return;
+        }
+
+        if (!_isDrawing) return;
 
         if (_previewElement != null)
             AnnotationCanvas.Children.Remove(_previewElement);
@@ -343,7 +592,7 @@ public partial class EditorWindow : Window
         _previewElement = _currentTool switch
         {
             "Arrow" => MakeArrow(_drawStart, cur, _arrowFillColor, _arrowStrokeColor, _arrowThickness, _arrowStrokeThickness, _arrowShadow),
-            "Rect"  => MakeRect(_drawStart, cur, _currentColor, _currentThickness),
+            "Rect"  => MakeRect(_drawStart, cur, _rectFillColor, _rectBorderColor, _rectBorderThickness, _rectCornerRadius, _rectOpacity, _rectShadow),
             "Crop"  => MakeCropPreview(_drawStart, cur),
             _       => null
         };
@@ -354,6 +603,14 @@ public partial class EditorWindow : Window
 
     private void Canvas_MouseUp(object sender, MouseButtonEventArgs e)
     {
+        if (_isDragging)
+        {
+            _isDragging = false;
+            AnnotationCanvas.ReleaseMouseCapture();
+            AnnotationCanvas.Cursor = Cursors.Cross;
+            return;
+        }
+
         if (!_isDrawing) return;
         _isDrawing = false;
         AnnotationCanvas.ReleaseMouseCapture();
@@ -396,21 +653,78 @@ public partial class EditorWindow : Window
             return;
         }
 
-        var other = _currentTool switch
+        if (_currentTool == "Rect")
         {
-            "Rect" => MakeRect(_drawStart, cur, _currentColor, _currentThickness),
-            _      => null
-        };
-        if (other != null)
-        {
-            AnnotationCanvas.Children.Add(other);
-            _annotations.Add(new Annotation { Tool = _currentTool, Element = other });
+            var el = MakeRect(_drawStart, cur, _rectFillColor, _rectBorderColor, _rectBorderThickness, _rectCornerRadius, _rectOpacity, _rectShadow);
+            AnnotationCanvas.Children.Add(el);
+            _annotations.Add(new Annotation
+            {
+                Tool         = "Rect",
+                Element      = el,
+                Start        = _drawStart,
+                End          = cur,
+                FillColor    = _rectFillColor,
+                StrokeColor  = _rectBorderColor,
+                Thickness    = _rectBorderThickness,
+                CornerRadius = _rectCornerRadius,
+                Opacity      = _rectOpacity,
+                Shadow       = _rectShadow,
+            });
         }
     }
 
     // ── Selection ─────────────────────────────────────────────────────────────
 
-    private Annotation? HitTestArrow(Point pos)
+    private Cursor HoverCursor(Point pos)
+    {
+        if (_selectedAnnotation?.Tool == "Arrow")
+        {
+            var d0 = _selectedAnnotation.Start - pos;
+            if (Math.Sqrt(d0.X * d0.X + d0.Y * d0.Y) <= 8) return Cursors.SizeNWSE;
+            var d1 = _selectedAnnotation.End - pos;
+            if (Math.Sqrt(d1.X * d1.X + d1.Y * d1.Y) <= 8) return Cursors.SizeNESW;
+        }
+        if (_selectedAnnotation?.Tool == "Rect")
+        {
+            int ci = FindNearestHandle(pos, _selectedAnnotation, 8);
+            if (ci >= 0)
+                return ci switch
+                {
+                    0 or 3 => Cursors.SizeNWSE,
+                    1 or 2 => Cursors.SizeNESW,
+                    4 or 6 => Cursors.SizeNS,
+                    5 or 7 => Cursors.SizeWE,
+                    _      => Cursors.Cross,
+                };
+        }
+        if (_selectedAnnotation != null && HitTestAnnotation(pos) == _selectedAnnotation)
+            return Cursors.SizeAll;
+        return Cursors.Cross;
+    }
+
+    private static int FindNearestHandle(Point pos, Annotation ann, double threshold)
+    {
+        var r = NormRect(ann.Start, ann.End);
+        double cx = (r.Left + r.Right)  / 2;
+        double cy = (r.Top  + r.Bottom) / 2;
+        Point[] corners = {
+            // corners (0-3)
+            new Point(r.Left,  r.Top),    new Point(r.Right, r.Top),
+            new Point(r.Left,  r.Bottom), new Point(r.Right, r.Bottom),
+            // edge midpoints (4-7): top, right, bottom, left
+            new Point(cx,      r.Top),    new Point(r.Right, cy),
+            new Point(cx,      r.Bottom), new Point(r.Left,  cy),
+        };
+        for (int i = 0; i < corners.Length; i++)
+        {
+            var d = corners[i] - pos;
+            if (Math.Sqrt(d.X * d.X + d.Y * d.Y) <= threshold)
+                return i;
+        }
+        return -1;
+    }
+
+    private Annotation? HitTestAnnotation(Point pos)
     {
         Annotation? found = null;
         VisualTreeHelper.HitTest(
@@ -419,7 +733,7 @@ public partial class EditorWindow : Window
             result =>
             {
                 var ann = FindAnnotationByVisual(result.VisualHit);
-                if (ann?.Tool == "Arrow") { found = ann; return HitTestResultBehavior.Stop; }
+                if (ann?.Tool == "Arrow" || ann?.Tool == "Rect") { found = ann; return HitTestResultBehavior.Stop; }
                 return HitTestResultBehavior.Continue;
             },
             new PointHitTestParameters(pos));
@@ -446,15 +760,31 @@ public partial class EditorWindow : Window
         DeselectAnnotation();
         _selectedAnnotation = ann;
 
-        _arrowFillColor       = ann.FillColor;
-        _arrowStrokeColor     = ann.StrokeColor;
-        _arrowThickness       = ann.Thickness;
-        _arrowStrokeThickness = ann.StrokeThickness;
-        _arrowShadow          = ann.Shadow;
+        if (ann.Tool == "Arrow")
+        {
+            _arrowFillColor       = ann.FillColor;
+            _arrowStrokeColor     = ann.StrokeColor;
+            _arrowThickness       = ann.Thickness;
+            _arrowStrokeThickness = ann.StrokeThickness;
+            _arrowShadow          = ann.Shadow;
 
-        UpdatePickerSelection(ArrowFillPicker,   ann.FillColor);
-        UpdatePickerSelection(ArrowStrokePicker, ann.StrokeColor);
-        ApplyArrowRadioSelections();
+            UpdatePickerSelection(ArrowFillPicker,   ann.FillColor);
+            UpdatePickerSelection(ArrowStrokePicker, ann.StrokeColor);
+            ApplyArrowRadioSelections();
+        }
+        else if (ann.Tool == "Rect")
+        {
+            _rectFillColor       = ann.FillColor;
+            _rectBorderColor     = ann.StrokeColor;
+            _rectBorderThickness = ann.Thickness;
+            _rectCornerRadius    = ann.CornerRadius;
+            _rectOpacity         = ann.Opacity;
+            _rectShadow          = ann.Shadow;
+
+            UpdateFillPickerSelection(RectFillPicker,    ann.FillColor);
+            UpdatePickerSelection(RectBorderPicker, ann.StrokeColor);
+            ApplyRectRadioSelections();
+        }
 
         ShowHandles(ann);
     }
@@ -475,7 +805,26 @@ public partial class EditorWindow : Window
     private void ShowHandles(Annotation ann)
     {
         HideHandles();
-        foreach (var pt in new[] { ann.Start, ann.End })
+        IEnumerable<Point> pts;
+        if (ann.Tool == "Rect")
+        {
+            var r = NormRect(ann.Start, ann.End);
+            double cx = (r.Left + r.Right)  / 2;
+            double cy = (r.Top  + r.Bottom) / 2;
+            pts = new[] {
+                // corners
+                new Point(r.Left,  r.Top),    new Point(r.Right, r.Top),
+                new Point(r.Left,  r.Bottom), new Point(r.Right, r.Bottom),
+                // edge midpoints
+                new Point(cx,      r.Top),    new Point(r.Right, cy),
+                new Point(cx,      r.Bottom), new Point(r.Left,  cy),
+            };
+        }
+        else
+        {
+            pts = new[] { ann.Start, ann.End };
+        }
+        foreach (var pt in pts)
         {
             var handle = new Ellipse
             {
@@ -501,19 +850,33 @@ public partial class EditorWindow : Window
 
     private void RedrawSelectedAnnotation()
     {
-        if (_selectedAnnotation?.Tool != "Arrow") return;
+        if (_selectedAnnotation == null) return;
         var ann = _selectedAnnotation;
 
-        ann.FillColor       = _arrowFillColor;
-        ann.StrokeColor     = _arrowStrokeColor;
-        ann.Thickness       = _arrowThickness;
-        ann.StrokeThickness = _arrowStrokeThickness;
-        ann.Shadow          = _arrowShadow;
+        UIElement newEl;
+        if (ann.Tool == "Arrow")
+        {
+            ann.FillColor       = _arrowFillColor;
+            ann.StrokeColor     = _arrowStrokeColor;
+            ann.Thickness       = _arrowThickness;
+            ann.StrokeThickness = _arrowStrokeThickness;
+            ann.Shadow          = _arrowShadow;
+            newEl = MakeArrow(ann.Start, ann.End, ann.FillColor, ann.StrokeColor, ann.Thickness, ann.StrokeThickness, ann.Shadow);
+        }
+        else if (ann.Tool == "Rect")
+        {
+            ann.FillColor    = _rectFillColor;
+            ann.StrokeColor  = _rectBorderColor;
+            ann.Thickness    = _rectBorderThickness;
+            ann.CornerRadius = _rectCornerRadius;
+            ann.Opacity      = _rectOpacity;
+            ann.Shadow       = _rectShadow;
+            newEl = MakeRect(ann.Start, ann.End, ann.FillColor, ann.StrokeColor, ann.Thickness, ann.CornerRadius, ann.Opacity, ann.Shadow);
+        }
+        else return;
 
         int idx = AnnotationCanvas.Children.IndexOf(ann.Element);
         AnnotationCanvas.Children.Remove(ann.Element);
-
-        var newEl = MakeArrow(ann.Start, ann.End, ann.FillColor, ann.StrokeColor, ann.Thickness, ann.StrokeThickness, ann.Shadow);
         ann.Element = newEl;
 
         if (idx >= 0)
@@ -620,20 +983,35 @@ public partial class EditorWindow : Window
         return fig;
     }
 
-    private static UIElement MakeRect(Point start, Point end, Color color, double thickness)
+    private static UIElement MakeRect(Point start, Point end, Color fillColor, Color borderColor, double borderThickness, double cornerRadius, double opacity, double shadow)
     {
         var r = NormRect(start, end);
-        var rect = new Rectangle
+
+        System.Windows.Media.Effects.DropShadowEffect? shadowEffect = shadow > 0
+            ? new System.Windows.Media.Effects.DropShadowEffect
+              {
+                  BlurRadius  = shadow,
+                  ShadowDepth = shadow * 0.4,
+                  Direction   = 315,
+                  Color       = Colors.Black,
+                  Opacity     = 0.5,
+              }
+            : null;
+
+        var border = new Border
         {
-            Stroke = new SolidColorBrush(color),
-            StrokeThickness = thickness,
-            Fill = Brushes.Transparent,
-            Width = r.Width,
-            Height = r.Height,
+            Width           = r.Width,
+            Height          = r.Height,
+            Background      = new SolidColorBrush(fillColor),
+            BorderBrush     = new SolidColorBrush(borderColor),
+            BorderThickness = new Thickness(borderThickness),
+            CornerRadius    = new CornerRadius(cornerRadius),
+            Opacity         = opacity / 100.0,
+            Effect          = shadowEffect,
         };
-        Canvas.SetLeft(rect, r.X);
-        Canvas.SetTop(rect, r.Y);
-        return rect;
+        Canvas.SetLeft(border, r.X);
+        Canvas.SetTop(border, r.Y);
+        return border;
     }
 
     private Rectangle MakeCropPreview(Point start, Point end)

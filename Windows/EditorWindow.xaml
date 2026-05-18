@@ -152,7 +152,10 @@
                         <ToggleButton x:Name="BtnRect"  Style="{StaticResource ToolBtn}"
                                       Checked="Tool_Checked" Tag="Rect" Margin="2,0,0,0" ToolTip="Rectangle">
                             <Viewbox Width="16" Height="16">
-                                <Path Data="M4,4H20V20H4V4M6,6V18H18V6H6Z" Fill="#CDD6F4"/>
+                                <Canvas Width="48" Height="48">
+                                    <Path Stroke="#CDD6F4" StrokeThickness="3" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"
+                                          Data="M3.50259 11.6223c0.21916 -2.20332 1.85062 -3.8419 4.05499 -4.05055C10.4991 7.29334 15.5931 7 24 7c8.4069 0 13.5009 0.29334 16.4424 0.57175 2.2044 0.20865 3.8358 1.84723 4.055 4.05055 0.2509 2.5221 0.5026 6.5137 0.5026 12.3776 0 5.864 -0.2517 9.8557 -0.5026 12.3777 -0.2192 2.2034 -1.8506 3.842 -4.055 4.0507C37.5009 40.7067 32.4069 41 24 41c-8.4069 0 -13.5009 -0.2933 -16.44238 -0.5717 -2.2044 -0.2087 -3.83586 -1.8473 -4.05503 -4.0507C3.25173 33.8556 3 29.8639 3 23.9999c0 -5.8639 0.25173 -9.8555 0.50259 -12.3776Z"/>
+                                </Canvas>
                             </Viewbox>
                         </ToggleButton>
                         <ToggleButton x:Name="BtnText"  Style="{StaticResource ToolBtn}"
@@ -254,6 +257,78 @@
                                          Checked="Thickness_Checked" Tag="3" GroupName="GlobalThickness" Margin="2,0,0,0"/>
                             <RadioButton x:Name="Thick5" Style="{StaticResource ThickBtn}" Content="5"
                                          Checked="Thickness_Checked" Tag="5" GroupName="GlobalThickness" Margin="2,0,0,0"/>
+                        </StackPanel>
+
+                        <!-- Rect tool properties -->
+                        <StackPanel x:Name="RectProperties" Orientation="Horizontal" VerticalAlignment="Center" Visibility="Collapsed">
+                            <TextBlock Text="Fill:" Foreground="#585B70" FontSize="12" FontFamily="Segoe UI"
+                                       VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <ItemsControl x:Name="RectFillPicker">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                            </ItemsControl>
+                            <TextBlock Text="Border:" Foreground="#585B70" FontSize="12" FontFamily="Segoe UI"
+                                       VerticalAlignment="Center" Margin="10,0,6,0"/>
+                            <ItemsControl x:Name="RectBorderPicker">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                            </ItemsControl>
+                            <TextBlock Text="Thickness:" Foreground="#585B70" FontSize="12" FontFamily="Segoe UI"
+                                       VerticalAlignment="Center" Margin="10,0,6,0"/>
+                            <RadioButton Style="{StaticResource ThickBtn}" Content="0" IsChecked="True"
+                                         Checked="RectBorderThickness_Checked" Tag="0" GroupName="RectBorderThickness"/>
+                            <RadioButton Style="{StaticResource ThickBtn}" Content="1"
+                                         Checked="RectBorderThickness_Checked" Tag="1" GroupName="RectBorderThickness" Margin="2,0,0,0"/>
+                            <RadioButton Style="{StaticResource ThickBtn}" Content="2"
+                                         Checked="RectBorderThickness_Checked" Tag="2" GroupName="RectBorderThickness" Margin="2,0,0,0"/>
+                            <RadioButton Style="{StaticResource ThickBtn}" Content="3"
+                                         Checked="RectBorderThickness_Checked" Tag="3" GroupName="RectBorderThickness" Margin="2,0,0,0"/>
+                            <RadioButton Style="{StaticResource ThickBtn}" Content="5"
+                                         Checked="RectBorderThickness_Checked" Tag="5" GroupName="RectBorderThickness" Margin="2,0,0,0"/>
+                            <TextBlock Text="Radius:" Foreground="#585B70" FontSize="12" FontFamily="Segoe UI"
+                                       VerticalAlignment="Center" Margin="20,0,6,0"/>
+                            <RadioButton Style="{StaticResource ThickBtn}" Content="0" IsChecked="True"
+                                         Checked="RectCornerRadius_Checked" Tag="0" GroupName="RectCornerRadius"/>
+                            <RadioButton Style="{StaticResource ThickBtn}" Content="2"
+                                         Checked="RectCornerRadius_Checked" Tag="2" GroupName="RectCornerRadius" Margin="2,0,0,0"/>
+                            <RadioButton Style="{StaticResource ThickBtn}" Content="4"
+                                         Checked="RectCornerRadius_Checked" Tag="4" GroupName="RectCornerRadius" Margin="2,0,0,0"/>
+                            <RadioButton Style="{StaticResource ThickBtn}" Content="8"
+                                         Checked="RectCornerRadius_Checked" Tag="8" GroupName="RectCornerRadius" Margin="2,0,0,0"/>
+                            <RadioButton Style="{StaticResource ThickBtn}" Content="16"
+                                         Checked="RectCornerRadius_Checked" Tag="16" GroupName="RectCornerRadius" Margin="2,0,0,0"/>
+                            <TextBlock Text="Opacity:" Foreground="#585B70" FontSize="12" FontFamily="Segoe UI"
+                                       VerticalAlignment="Center" Margin="20,0,6,0"/>
+                            <RadioButton Style="{StaticResource ThickBtn}" Content="25"
+                                         Checked="RectOpacity_Checked" Tag="25" GroupName="RectOpacity"/>
+                            <RadioButton Style="{StaticResource ThickBtn}" Content="50"
+                                         Checked="RectOpacity_Checked" Tag="50" GroupName="RectOpacity" Margin="2,0,0,0"/>
+                            <RadioButton Style="{StaticResource ThickBtn}" Content="75"
+                                         Checked="RectOpacity_Checked" Tag="75" GroupName="RectOpacity" Margin="2,0,0,0"/>
+                            <RadioButton Style="{StaticResource ThickBtn}" Content="100" IsChecked="True"
+                                         Checked="RectOpacity_Checked" Tag="100" GroupName="RectOpacity" Margin="2,0,0,0"/>
+                            <TextBlock Text="Shadow:" Foreground="#585B70" FontSize="12" FontFamily="Segoe UI"
+                                       VerticalAlignment="Center" Margin="20,0,6,0"/>
+                            <RadioButton Style="{StaticResource ThickBtn}" Content="0" IsChecked="True"
+                                         Checked="RectShadow_Checked" Tag="0" GroupName="RectShadow"/>
+                            <RadioButton Style="{StaticResource ThickBtn}" Content="1"
+                                         Checked="RectShadow_Checked" Tag="1" GroupName="RectShadow" Margin="2,0,0,0"/>
+                            <RadioButton Style="{StaticResource ThickBtn}" Content="3"
+                                         Checked="RectShadow_Checked" Tag="3" GroupName="RectShadow" Margin="2,0,0,0"/>
+                            <RadioButton Style="{StaticResource ThickBtn}" Content="5"
+                                         Checked="RectShadow_Checked" Tag="5" GroupName="RectShadow" Margin="2,0,0,0"/>
+                            <RadioButton Style="{StaticResource ThickBtn}" Content="7"
+                                         Checked="RectShadow_Checked" Tag="7" GroupName="RectShadow" Margin="2,0,0,0"/>
+                            <RadioButton Style="{StaticResource ThickBtn}" Content="10"
+                                         Checked="RectShadow_Checked" Tag="10" GroupName="RectShadow" Margin="2,0,0,0"/>
+                            <RadioButton Style="{StaticResource ThickBtn}" Content="15"
+                                         Checked="RectShadow_Checked" Tag="15" GroupName="RectShadow" Margin="2,0,0,0"/>
                         </StackPanel>
 
                         <!-- Arrow tool properties -->
