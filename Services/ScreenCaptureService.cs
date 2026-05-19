@@ -87,10 +87,12 @@ public static class ScreenCaptureService
         var hBitmap = bitmap.GetHbitmap();
         try
         {
-            return Imaging.CreateBitmapSourceFromHBitmap(
+            var source = Imaging.CreateBitmapSourceFromHBitmap(
                 hBitmap, IntPtr.Zero,
                 System.Windows.Int32Rect.Empty,
                 BitmapSizeOptions.FromEmptyOptions());
+            source.Freeze();
+            return source;
         }
         finally
         {

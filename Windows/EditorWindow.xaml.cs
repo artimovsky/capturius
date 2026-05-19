@@ -1005,6 +1005,7 @@ public partial class EditorWindow : Window
 
         var geo = new PathGeometry();
         geo.Figures.Add(RoundedPolygon(poly, round, 1.0));
+        geo.Freeze();
 
         System.Windows.Media.Effects.DropShadowEffect? shadowEffect = shadow > 0
             ? new System.Windows.Media.Effects.DropShadowEffect
@@ -1016,19 +1017,23 @@ public partial class EditorWindow : Window
                   Opacity     = 0.5,
               }
             : null;
+        shadowEffect?.Freeze();
+
+        var fillBrush   = new SolidColorBrush(fillColor);   fillBrush.Freeze();
+        var strokeBrush = new SolidColorBrush(strokeColor); strokeBrush.Freeze();
 
         if (strokeThickness == 0)
-            return new Path { Data = geo, Fill = new SolidColorBrush(fillColor), Effect = shadowEffect };
+            return new Path { Data = geo, Fill = fillBrush, Effect = shadowEffect };
 
         var bgPath = new Path
         {
             Data            = geo,
-            Fill            = new SolidColorBrush(strokeColor),
-            Stroke          = new SolidColorBrush(strokeColor),
+            Fill            = strokeBrush,
+            Stroke          = strokeBrush,
             StrokeThickness = strokeThickness * 2,
             StrokeLineJoin  = PenLineJoin.Round,
         };
-        var fgPath = new Path { Data = geo, Fill = new SolidColorBrush(fillColor) };
+        var fgPath = new Path { Data = geo, Fill = fillBrush };
         var container = new Grid { Effect = shadowEffect };
         container.Children.Add(bgPath);
         container.Children.Add(fgPath);
@@ -1085,13 +1090,17 @@ public partial class EditorWindow : Window
                   Opacity     = 0.5,
               }
             : null;
+        shadowEffect?.Freeze();
+
+        var bgBrush     = new SolidColorBrush(fillColor);   bgBrush.Freeze();
+        var borderBrush = new SolidColorBrush(borderColor); borderBrush.Freeze();
 
         var border = new Border
         {
             Width           = r.Width,
             Height          = r.Height,
-            Background      = new SolidColorBrush(fillColor),
-            BorderBrush     = new SolidColorBrush(borderColor),
+            Background      = bgBrush,
+            BorderBrush     = borderBrush,
             BorderThickness = new Thickness(borderThickness),
             CornerRadius    = new CornerRadius(cornerRadius),
             Opacity         = opacity / 100.0,
