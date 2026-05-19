@@ -158,6 +158,13 @@
                                 </Canvas>
                             </Viewbox>
                         </ToggleButton>
+                        <ToggleButton x:Name="BtnHighlighter" Style="{StaticResource ToolBtn}"
+                                      Checked="Tool_Checked" Tag="Highlighter" Margin="2,0,0,0" ToolTip="Highlighter">
+                            <Viewbox Width="16" Height="16">
+                                <Path Stroke="#CDD6F4" StrokeThickness="3" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"
+                                      Data="M7.854 12.548c.182-2.558 2.136-4.512 4.694-4.694C15.103 7.67 18.868 7.5 24 7.5c5.133 0 8.897.171 11.452.354 2.558.182 4.512 2.136 4.694 4.694.183 2.555.354 6.32.354 11.452 0 5.133-.171 8.897-.354 11.452-.182 2.558-2.136 4.512-4.694 4.694-2.555.183-6.32.354-11.452.354-5.133 0-8.897-.171-11.452-.354-2.558-.182-4.512-2.136-4.694-4.694C7.67 32.897 7.5 29.132 7.5 24c0-5.133.171-8.897.354-11.452 M9.5 9.5l29 29M21.5 7.5l19 19M26.5 40.5l-19-19"/>
+                            </Viewbox>
+                        </ToggleButton>
                         <ToggleButton x:Name="BtnText"  Style="{StaticResource ToolBtn}"
                                       Checked="Tool_Checked" Tag="Text" Margin="2,0,0,0" ToolTip="Text">
                             <Viewbox Width="16" Height="16">
@@ -329,6 +336,35 @@
                                          Checked="RectShadow_Checked" Tag="10" GroupName="RectShadow" Margin="2,0,0,0"/>
                             <RadioButton Style="{StaticResource ThickBtn}" Content="15"
                                          Checked="RectShadow_Checked" Tag="15" GroupName="RectShadow" Margin="2,0,0,0"/>
+                        </StackPanel>
+
+                        <!-- Highlighter tool properties -->
+                        <StackPanel x:Name="HighlighterProperties" Orientation="Horizontal" VerticalAlignment="Center" Visibility="Collapsed">
+                            <TextBlock Text="Color:" Foreground="#585B70" FontSize="12" FontFamily="Segoe UI"
+                                       VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <ItemsControl x:Name="HighlighterColorPicker">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                            </ItemsControl>
+                            <TextBlock Text="Shadow:" Foreground="#585B70" FontSize="12" FontFamily="Segoe UI"
+                                       VerticalAlignment="Center" Margin="20,0,6,0"/>
+                            <RadioButton Style="{StaticResource ThickBtn}" Content="0" IsChecked="True"
+                                         Checked="HighlighterShadow_Checked" Tag="0" GroupName="HighlighterShadow"/>
+                            <RadioButton Style="{StaticResource ThickBtn}" Content="1"
+                                         Checked="HighlighterShadow_Checked" Tag="1" GroupName="HighlighterShadow" Margin="2,0,0,0"/>
+                            <RadioButton Style="{StaticResource ThickBtn}" Content="3"
+                                         Checked="HighlighterShadow_Checked" Tag="3" GroupName="HighlighterShadow" Margin="2,0,0,0"/>
+                            <RadioButton Style="{StaticResource ThickBtn}" Content="5"
+                                         Checked="HighlighterShadow_Checked" Tag="5" GroupName="HighlighterShadow" Margin="2,0,0,0"/>
+                            <RadioButton Style="{StaticResource ThickBtn}" Content="7"
+                                         Checked="HighlighterShadow_Checked" Tag="7" GroupName="HighlighterShadow" Margin="2,0,0,0"/>
+                            <RadioButton Style="{StaticResource ThickBtn}" Content="10"
+                                         Checked="HighlighterShadow_Checked" Tag="10" GroupName="HighlighterShadow" Margin="2,0,0,0"/>
+                            <RadioButton Style="{StaticResource ThickBtn}" Content="15"
+                                         Checked="HighlighterShadow_Checked" Tag="15" GroupName="HighlighterShadow" Margin="2,0,0,0"/>
                         </StackPanel>
 
                         <!-- Arrow tool properties -->

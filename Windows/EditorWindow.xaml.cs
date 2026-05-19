@@ -57,6 +57,10 @@ public partial class EditorWindow : Window
     private double _rectOpacity         = 100;
     private double _rectShadow          = 0;
 
+    // Highlighter tool state
+    private Color  _highlighterColor  = Color.FromRgb(0xFF, 0xFF, 0x00);
+    private double _highlighterShadow = 0;
+
     // Temporary shape shown while dragging
     private UIElement? _previewElement;
     // All committed annotations
@@ -99,12 +103,14 @@ public partial class EditorWindow : Window
 
         LoadArrowSettings();
         LoadRectSettings();
+        LoadHighlighterSettings();
         BuildColorPicker();
         BuildArrowColorPickers();
         BuildRectColorPickers();
+        BuildHighlighterColorPicker();
         SetZoom(1.0);
 
-        Loaded += (_, _) => { ApplyArrowRadioSelections(); ApplyRectRadioSelections(); };
+        Loaded += (_, _) => { ApplyArrowRadioSelections(); ApplyRectRadioSelections(); ApplyHighlighterRadioSelections(); };
 
         PreviewKeyDown += (_, e) =>
         {
@@ -183,6 +189,24 @@ public partial class EditorWindow : Window
         });
     }
 
+    private static readonly (Color Color, string Name)[] HighlighterColorPresets =
+    [
+        (Color.FromRgb(0xFF, 0xFF, 0x00), "Bright Yellow"),
+        (Color.FromRgb(0xFF, 0x6B, 0x8A), "Pink"),
+        ..ColorPresets,
+    ];
+
+    private void BuildHighlighterColorPicker()
+    {
+        BuildColorPickerItems(HighlighterColorPicker, HighlighterColorPresets, () => _highlighterColor, c =>
+        {
+            _highlighterColor = c;
+            UpdatePickerSelection(HighlighterColorPicker, c);
+            SaveHighlighterSettings();
+            RedrawSelectedAnnotation();
+        });
+    }
+
     private void BuildFillColorPickerItems(ItemsControl control, Func<Color> getColor, Action<Color> onSelect)
     {
         // "None" swatch (transparent fill)
@@ -222,8 +246,11 @@ public partial class EditorWindow : Window
     }
 
     private void BuildColorPickerItems(ItemsControl control, Func<Color> getColor, Action<Color> onSelect)
+        => BuildColorPickerItems(control, ColorPresets, getColor, onSelect);
+
+    private void BuildColorPickerItems(ItemsControl control, (Color Color, string Name)[] presets, Func<Color> getColor, Action<Color> onSelect)
     {
-        foreach (var (color, name) in ColorPresets)
+        foreach (var (color, name) in presets)
         {
             var btn = new Border
             {
@@ -259,14 +286,16 @@ public partial class EditorWindow : Window
         _currentTool = ((ToggleButton)sender).Tag!.ToString()!;
         UncheckOtherTools((ToggleButton)sender);
 
-        bool isCrop  = _currentTool == "Crop";
-        bool isArrow = _currentTool == "Arrow";
-        bool isRect  = _currentTool == "Rect";
+        bool isCrop        = _currentTool == "Crop";
+        bool isArrow       = _currentTool == "Arrow";
+        bool isRect        = _currentTool == "Rect";
+        bool isHighlighter = _currentTool == "Highlighter";
 
-        BtnApplyCrop.Visibility     = isCrop             ? Visibility.Visible   : Visibility.Collapsed;
-        GlobalProperties.Visibility = (isArrow || isRect) ? Visibility.Collapsed : Visibility.Visible;
-        ArrowProperties.Visibility  = isArrow            ? Visibility.Visible   : Visibility.Collapsed;
-        RectProperties.Visibility   = isRect             ? Visibility.Visible   : Visibility.Collapsed;
+        BtnApplyCrop.Visibility          = isCrop                                   ? Visibility.Visible   : Visibility.Collapsed;
+        GlobalProperties.Visibility      = (isArrow || isRect || isHighlighter) ? Visibility.Collapsed : Visibility.Visible;
+        ArrowProperties.Visibility       = isArrow       ? Visibility.Visible   : Visibility.Collapsed;
+        RectProperties.Visibility        = isRect        ? Visibility.Visible   : Visibility.Collapsed;
+        HighlighterProperties.Visibility = isHighlighter ? Visibility.Visible   : Visibility.Collapsed;
 
         if (!isCrop) RemoveCropPreview();
         AnnotationCanvas.Cursor = _currentTool == "Text" ? Cursors.IBeam : Cursors.Cross;
@@ -276,7 +305,7 @@ public partial class EditorWindow : Window
 
     private void UncheckOtherTools(ToggleButton active)
     {
-        foreach (var btn in new[] { BtnArrow, BtnRect, BtnText, BtnCrop })
+        foreach (var btn in new[] { BtnArrow, BtnRect, BtnHighlighter, BtnText, BtnCrop })
             if (btn != null && btn != active) btn.IsChecked = false;
     }
 
@@ -378,6 +407,27 @@ public partial class EditorWindow : Window
         key.SetValue("RectShadow",          _rectShadow);
     }
 
+    private void LoadHighlighterSettings()
+    {
+        using var key = Registry.CurrentUser.OpenSubKey(EditorRegKey);
+        if (key == null) return;
+        _highlighterColor = ParseColor(key.GetValue("HighlighterColor") as string, _highlighterColor);
+        if (double.TryParse(key.GetValue("HighlighterShadow")?.ToString(), out var sh)) _highlighterShadow = sh;
+    }
+
+    private void SaveHighlighterSettings()
+    {
+        using var key = Registry.CurrentUser.CreateSubKey(EditorRegKey);
+        key.SetValue("HighlighterColor",  ColorToString(_highlighterColor));
+        key.SetValue("HighlighterShadow", _highlighterShadow);
+    }
+
+    private void HighlighterShadow_Checked(object sender, RoutedEventArgs e)
+    {
+        if (double.TryParse(((RadioButton)sender).Tag?.ToString(), out var t))
+        { _highlighterShadow = t; SaveHighlighterSettings(); RedrawSelectedAnnotation(); }
+    }
+
     private void ApplyArrowRadioSelections()
     {
         SelectRadio("ArrowThickness",       (int)_arrowThickness);
@@ -393,10 +443,15 @@ public partial class EditorWindow : Window
         SelectRadio("RectShadow",          (int)_rectShadow);
     }
 
+    private void ApplyHighlighterRadioSelections()
+    {
+        SelectRadio("HighlighterShadow", (int)_highlighterShadow);
+    }
+
     private void SelectRadio(string groupName, int value)
     {
         string tag = value.ToString();
-        foreach (var panel in new StackPanel[] { ArrowProperties, RectProperties })
+        foreach (var panel in new StackPanel[] { ArrowProperties, RectProperties, HighlighterProperties })
             foreach (UIElement child in panel.Children)
                 if (child is RadioButton rb && rb.GroupName == groupName)
                     rb.IsChecked = rb.Tag?.ToString() == tag;
@@ -443,7 +498,7 @@ public partial class EditorWindow : Window
     {
         var pos = e.GetPosition(AnnotationCanvas);
 
-        if (_currentTool == "Arrow" || _currentTool == "Rect")
+        if (_currentTool == "Arrow" || _currentTool == "Rect" || _currentTool == "Highlighter")
         {
             // 1a. Check endpoints of selected Arrow → drag endpoint
             if (_selectedAnnotation?.Tool == "Arrow")
@@ -467,8 +522,8 @@ public partial class EditorWindow : Window
                 }
             }
 
-            // 1b. Check corner handles of selected Rect → resize
-            if (_selectedAnnotation?.Tool == "Rect")
+            // 1b. Check corner handles of selected Rect/Highlighter → resize
+            if (_selectedAnnotation?.Tool == "Rect" || _selectedAnnotation?.Tool == "Highlighter")
             {
                 int ci = FindNearestHandle(pos, _selectedAnnotation, 8);
                 if (ci >= 0)
@@ -504,8 +559,9 @@ public partial class EditorWindow : Window
                     _dragMode       = "move";
                     _dragMouseStart = pos;
                     var r = NormRect(hit.Start, hit.End);
-                    _dragAnnStart = hit.Tool == "Rect" ? new Point(r.Left, r.Top)     : hit.Start;
-                    _dragAnnEnd   = hit.Tool == "Rect" ? new Point(r.Right, r.Bottom) : hit.End;
+                    bool isRectLike = hit.Tool == "Rect" || hit.Tool == "Highlighter";
+                    _dragAnnStart = isRectLike ? new Point(r.Left, r.Top)     : hit.Start;
+                    _dragAnnEnd   = isRectLike ? new Point(r.Right, r.Bottom) : hit.End;
                     AnnotationCanvas.Cursor = Cursors.SizeAll;
                     AnnotationCanvas.CaptureMouse();
                     return;
@@ -548,7 +604,7 @@ public partial class EditorWindow : Window
                     if (_dragCornerIdx == 0) ann.Start = cur;
                     else                     ann.End   = cur;
                 }
-                else // Rect
+                else // Rect / Highlighter
                 {
                     switch (_dragCornerIdx)
                     {
@@ -568,9 +624,12 @@ public partial class EditorWindow : Window
 
             int idx = AnnotationCanvas.Children.IndexOf(ann.Element);
             AnnotationCanvas.Children.Remove(ann.Element);
-            ann.Element = ann.Tool == "Rect"
-                ? MakeRect(ann.Start, ann.End, ann.FillColor, ann.StrokeColor, ann.Thickness, ann.CornerRadius, ann.Opacity, ann.Shadow)
-                : MakeArrow(ann.Start, ann.End, ann.FillColor, ann.StrokeColor, ann.Thickness, ann.StrokeThickness, ann.Shadow);
+            ann.Element = ann.Tool switch
+            {
+                "Rect"        => MakeRect(ann.Start, ann.End, ann.FillColor, ann.StrokeColor, ann.Thickness, ann.CornerRadius, ann.Opacity, ann.Shadow),
+                "Highlighter" => MakeHighlighter(ann.Start, ann.End, ann.FillColor, ann.Shadow),
+                _             => MakeArrow(ann.Start, ann.End, ann.FillColor, ann.StrokeColor, ann.Thickness, ann.StrokeThickness, ann.Shadow),
+            };
             if (idx >= 0) AnnotationCanvas.Children.Insert(idx, ann.Element);
             else          AnnotationCanvas.Children.Add(ann.Element);
             ShowHandles(ann);
@@ -578,7 +637,7 @@ public partial class EditorWindow : Window
         }
 
         // Cursor update while hovering (not drawing, not dragging)
-        if (!_isDrawing && (_currentTool == "Arrow" || _currentTool == "Rect"))
+        if (!_isDrawing && (_currentTool == "Arrow" || _currentTool == "Rect" || _currentTool == "Highlighter"))
         {
             AnnotationCanvas.Cursor = HoverCursor(cur);
             return;
@@ -591,10 +650,11 @@ public partial class EditorWindow : Window
 
         _previewElement = _currentTool switch
         {
-            "Arrow" => MakeArrow(_drawStart, cur, _arrowFillColor, _arrowStrokeColor, _arrowThickness, _arrowStrokeThickness, _arrowShadow),
-            "Rect"  => MakeRect(_drawStart, cur, _rectFillColor, _rectBorderColor, _rectBorderThickness, _rectCornerRadius, _rectOpacity, _rectShadow),
-            "Crop"  => MakeCropPreview(_drawStart, cur),
-            _       => null
+            "Arrow"       => MakeArrow(_drawStart, cur, _arrowFillColor, _arrowStrokeColor, _arrowThickness, _arrowStrokeThickness, _arrowShadow),
+            "Rect"        => MakeRect(_drawStart, cur, _rectFillColor, _rectBorderColor, _rectBorderThickness, _rectCornerRadius, _rectOpacity, _rectShadow),
+            "Highlighter" => MakeHighlighter(_drawStart, cur, _highlighterColor, _highlighterShadow),
+            "Crop"        => MakeCropPreview(_drawStart, cur),
+            _             => null
         };
 
         if (_previewElement != null)
@@ -671,6 +731,21 @@ public partial class EditorWindow : Window
                 Shadow       = _rectShadow,
             });
         }
+
+        if (_currentTool == "Highlighter")
+        {
+            var el = MakeHighlighter(_drawStart, cur, _highlighterColor, _highlighterShadow);
+            AnnotationCanvas.Children.Add(el);
+            _annotations.Add(new Annotation
+            {
+                Tool      = "Highlighter",
+                Element   = el,
+                Start     = _drawStart,
+                End       = cur,
+                FillColor = _highlighterColor,
+                Shadow    = _highlighterShadow,
+            });
+        }
     }
 
     // ── Selection ─────────────────────────────────────────────────────────────
@@ -684,7 +759,7 @@ public partial class EditorWindow : Window
             var d1 = _selectedAnnotation.End - pos;
             if (Math.Sqrt(d1.X * d1.X + d1.Y * d1.Y) <= 8) return Cursors.SizeNESW;
         }
-        if (_selectedAnnotation?.Tool == "Rect")
+        if (_selectedAnnotation?.Tool == "Rect" || _selectedAnnotation?.Tool == "Highlighter")
         {
             int ci = FindNearestHandle(pos, _selectedAnnotation, 8);
             if (ci >= 0)
@@ -733,7 +808,7 @@ public partial class EditorWindow : Window
             result =>
             {
                 var ann = FindAnnotationByVisual(result.VisualHit);
-                if (ann?.Tool == "Arrow" || ann?.Tool == "Rect") { found = ann; return HitTestResultBehavior.Stop; }
+                if (ann?.Tool == "Arrow" || ann?.Tool == "Rect" || ann?.Tool == "Highlighter") { found = ann; return HitTestResultBehavior.Stop; }
                 return HitTestResultBehavior.Continue;
             },
             new PointHitTestParameters(pos));
@@ -785,6 +860,13 @@ public partial class EditorWindow : Window
             UpdatePickerSelection(RectBorderPicker, ann.StrokeColor);
             ApplyRectRadioSelections();
         }
+        else if (ann.Tool == "Highlighter")
+        {
+            _highlighterColor  = ann.FillColor;
+            _highlighterShadow = ann.Shadow;
+            UpdatePickerSelection(HighlighterColorPicker, ann.FillColor);
+            ApplyHighlighterRadioSelections();
+        }
 
         ShowHandles(ann);
     }
@@ -806,7 +888,7 @@ public partial class EditorWindow : Window
     {
         HideHandles();
         IEnumerable<Point> pts;
-        if (ann.Tool == "Rect")
+        if (ann.Tool == "Rect" || ann.Tool == "Highlighter")
         {
             var r = NormRect(ann.Start, ann.End);
             double cx = (r.Left + r.Right)  / 2;
@@ -873,6 +955,12 @@ public partial class EditorWindow : Window
             ann.Shadow       = _rectShadow;
             newEl = MakeRect(ann.Start, ann.End, ann.FillColor, ann.StrokeColor, ann.Thickness, ann.CornerRadius, ann.Opacity, ann.Shadow);
         }
+        else if (ann.Tool == "Highlighter")
+        {
+            ann.FillColor = _highlighterColor;
+            ann.Shadow    = _highlighterShadow;
+            newEl = MakeHighlighter(ann.Start, ann.End, ann.FillColor, ann.Shadow);
+        }
         else return;
 
         int idx = AnnotationCanvas.Children.IndexOf(ann.Element);
@@ -922,7 +1010,7 @@ public partial class EditorWindow : Window
             ? new System.Windows.Media.Effects.DropShadowEffect
               {
                   BlurRadius  = shadow,
-                  ShadowDepth = shadow * 0.4,
+                  ShadowDepth = 0,
                   Direction   = 315,
                   Color       = Colors.Black,
                   Opacity     = 0.5,
@@ -991,7 +1079,7 @@ public partial class EditorWindow : Window
             ? new System.Windows.Media.Effects.DropShadowEffect
               {
                   BlurRadius  = shadow,
-                  ShadowDepth = shadow * 0.4,
+                  ShadowDepth = 0,
                   Direction   = 315,
                   Color       = Colors.Black,
                   Opacity     = 0.5,
@@ -1012,6 +1100,63 @@ public partial class EditorWindow : Window
         Canvas.SetLeft(border, r.X);
         Canvas.SetTop(border, r.Y);
         return border;
+    }
+
+    private UIElement MakeHighlighter(Point start, Point end, Color fillColor, double shadow)
+    {
+        var r = NormRect(start, end);
+        int x = (int)Math.Max(0, r.X);
+        int y = (int)Math.Max(0, r.Y);
+        int w = (int)Math.Min(r.Width,  _bitmapSource.PixelWidth  - x);
+        int h = (int)Math.Min(r.Height, _bitmapSource.PixelHeight - y);
+        if (w <= 0 || h <= 0)
+        {
+            var empty = new Border { Width = Math.Max(r.Width, 1), Height = Math.Max(r.Height, 1) };
+            Canvas.SetLeft(empty, r.X); Canvas.SetTop(empty, r.Y);
+            return empty;
+        }
+
+        var crop = new CroppedBitmap(_bitmapSource, new Int32Rect(x, y, w, h));
+        var bgra = new FormatConvertedBitmap(crop, PixelFormats.Bgra32, null, 0);
+
+        int stride = w * 4;
+        var pixels = new byte[h * stride];
+        bgra.CopyPixels(pixels, stride, 0);
+
+        // Multiply blend: result = background * highlight (dark areas stay dark)
+        float fr = fillColor.R / 255f;
+        float fg = fillColor.G / 255f;
+        float fb = fillColor.B / 255f;
+        for (int i = 0; i < pixels.Length; i += 4)
+        {
+            pixels[i]     = (byte)(pixels[i]     * fb); // B
+            pixels[i + 1] = (byte)(pixels[i + 1] * fg); // G
+            pixels[i + 2] = (byte)(pixels[i + 2] * fr); // R
+        }
+
+        var wb = new WriteableBitmap(w, h, 96, 96, PixelFormats.Bgra32, null);
+        wb.WritePixels(new Int32Rect(0, 0, w, h), pixels, stride, 0);
+
+        var img = new System.Windows.Controls.Image
+        {
+            Source  = wb,
+            Width   = w,
+            Height  = h,
+            Stretch = Stretch.None,
+            Effect  = shadow > 0
+                ? new System.Windows.Media.Effects.DropShadowEffect
+                  {
+                      BlurRadius  = shadow,
+                      ShadowDepth = 0,
+                      Direction   = 315,
+                      Color       = Colors.Black,
+                      Opacity     = 0.5,
+                  }
+                : null,
+        };
+        Canvas.SetLeft(img, x);
+        Canvas.SetTop(img, y);
+        return img;
     }
 
     private Rectangle MakeCropPreview(Point start, Point end)
