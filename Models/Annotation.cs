@@ -39,4 +39,20 @@ public sealed class RectAnnotation : Annotation
     public override bool IsRectLike   => true;
 }
 
-public sealed class TextAnnotation : Annotation { }
+public sealed class TextAnnotation : Annotation
+{
+    public string            Text                 { get; set; } = "";
+    public string            FontFamilyName       { get; set; } = "Segoe UI";
+    public double            FontSize             { get; set; } = 18;
+    public Color             TextColor            { get; set; } = Color.FromRgb(0xCD, 0xD6, 0xF4);
+    public double            StrokeThickness { get; set; } = 0;
+    public Color             StrokeColor     { get; set; } = Colors.Black;
+    public double            Shadow          { get; set; } = 0;
+    public TextAlignment     HAlign          { get; set; } = TextAlignment.Left;
+    public VerticalAlignment VAlign               { get; set; } = VerticalAlignment.Top;
+
+    public bool IsEditing { get; set; }
+
+    public override bool IsSelectable => true;
+    public override bool IsRectLike   => true;
+}

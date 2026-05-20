@@ -248,6 +248,20 @@ public sealed class AnnotationManager
             }
         }
 
+        // While editing a text annotation: resize the live TextBox directly
+        // (Remove+Add would cause focus loss)
+        if (ann is TextAnnotation { IsEditing: true } && ann.Element is FrameworkElement editFe)
+        {
+            var r = ShapeHelper.NormRect(ann.Start, ann.End);
+            editFe.Width  = Math.Max(r.Width,  40);
+            editFe.Height = Math.Max(r.Height, 20);
+            Canvas.SetLeft(editFe, r.X);
+            Canvas.SetTop(editFe, r.Y);
+            ann.Start = new Point(r.X, r.Y);
+            ShowHandles(ann);
+            return;
+        }
+
         int idx = _canvas.Children.IndexOf(ann.Element);
         _canvas.Children.Remove(ann.Element);
         ann.Element = ann.Tool.Render(ann);

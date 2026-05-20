@@ -132,7 +132,14 @@
                         <ToggleButton x:Name="BtnText"  Style="{StaticResource ToolBtn}"
                                       Checked="Tool_Checked" Tag="Text" Margin="2,0,0,0" ToolTip="Text">
                             <Viewbox Width="16" Height="16">
-                                <Path Data="M5,4V7H11V19H13V7H19V4H5Z" Fill="#CDD6F4"/>
+                                <Canvas Width="48" Height="48">
+                                    <Path Stroke="#CDD6F4" StrokeThickness="3" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"
+                                          Data="M34.293 13.5c.983 0 1.818.715 1.908 1.694.145 1.567.262 3.968-.07 6.093a.93.93 0 0 1-.853.777c-.902.069-2.468.156-3.611.04-.406-.04-.708-.368-.77-.771L30.61 19.5H27V30h2.279c.43 0 .81.275.905.695.204.91.452 2.575.028 4.162-.105.395-.48.643-.89.643H18.678c-.41 0-.784-.248-.89-.643-.424-1.587-.176-3.252.028-4.162.094-.42.475-.695.905-.695H21V19.5h-3.5l-.285 1.833c-.062.403-.364.73-.77.771-1.167.117-2.793.028-3.72-.042a.93.93 0 0 1-.857-.777c-.331-2.125-.214-4.525-.07-6.091.091-.98.925-1.694 1.908-1.694z"/>
+                                    <Path Stroke="#CDD6F4" StrokeThickness="3" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"
+                                          Data="M7 37a4 4 0 1 1 0 8 4 4 0 0 1 0-8M41 37a4 4 0 1 1 0 8 4 4 0 0 1 0-8M41 3a4 4 0 1 1 0 8 4 4 0 0 1 0-8M7 3a4 4 0 1 1 0 8 4 4 0 0 1 0-8"/>
+                                    <Path Stroke="#CDD6F4" StrokeThickness="3" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"
+                                          Data="M6.426 10.96C6.213 13.745 6 18.021 6 24s.213 10.254.426 13.04m4.533 4.534C13.746 41.787 18.022 42 24 42s10.254-.213 13.04-.426m4.534-4.533C41.787 34.254 42 29.978 42 24s-.213-10.254-.426-13.04M37.04 6.425C34.254 6.213 29.978 6 24 6s-10.254.213-13.04.426"/>
+                                </Canvas>
                             </Viewbox>
                         </ToggleButton>
                         <ToggleButton x:Name="BtnCrop"  Style="{StaticResource ToolBtn}"
@@ -205,7 +212,9 @@
 
                 <!-- Row 2: Tool properties (populated by the active tool) -->
                 <Border Background="#11111B" BorderThickness="0,1,0,0" BorderBrush="#313244" Padding="8,4">
-                    <ContentControl x:Name="ToolPropertiesHost" VerticalAlignment="Center"/>
+                    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                        <ContentControl x:Name="ToolPropertiesHost" VerticalAlignment="Center"/>
+                    </ScrollViewer>
                 </Border>
 
             </StackPanel>

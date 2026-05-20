@@ -42,7 +42,7 @@ public static class UiHelper
             Tag       = content,
             Style     = (Style)Application.Current.Resources["ThickBtn"],
         };
-        rb.Checked += (_, _) => onChecked();
+        rb.Click += (_, _) => onChecked();
         return rb;
     }
 }

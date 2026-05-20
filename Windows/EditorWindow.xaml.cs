@@ -114,7 +114,34 @@ public partial class EditorWindow : Window
     {
         var pos = e.GetPosition(AnnotationCanvas);
 
-        if (_currentTool is not CropTool and not TextTool)
+        if (_manager.Selected is TextAnnotation { IsEditing: true })
+        {
+            if (_manager.TryBeginDrag(pos))
+            {
+                AnnotationCanvas.Cursor = _manager.DragCursor;
+                AnnotationCanvas.CaptureMouse();
+            }
+            else
+            {
+                _textTool.CommitPending();
+            }
+            return;
+        }
+
+        // Double-click on a text annotation → enter edit mode
+        if (e.ClickCount == 2)
+        {
+            var hitAnn = _manager.HitTest(pos);
+            if (hitAnn is TextAnnotation textAnn)
+            {
+                _manager.Deselect();
+                _textTool.BeginEdit(AnnotationCanvas, textAnn, () => _manager.Select(textAnn));
+                Dispatcher.BeginInvoke(() => AttachEditingHandles(textAnn));
+                return;
+            }
+        }
+
+        if (_currentTool is not CropTool)
         {
             if (_manager.TryBeginDrag(pos))
             {
@@ -134,20 +161,10 @@ public partial class EditorWindow : Window
         }
 
         _manager.Deselect();
-        // Record what's under the cursor so a short click can select it later
-        _hitOnDown = _currentTool is CropTool or TextTool ? null : _manager.HitTest(pos);
+        _hitOnDown = _currentTool is CropTool ? null : _manager.HitTest(pos);
         _drawStart = pos;
         _isDrawing = true;
         AnnotationCanvas.CaptureMouse();
-
-        if (_currentTool is TextTool textTool)
-        {
-            _isDrawing = false;
-            AnnotationCanvas.ReleaseMouseCapture();
-            TextAnnotation? ann = null;
-            ann = textTool.PlaceOn(AnnotationCanvas, pos, () => _manager.Delete(ann!));
-            _manager.Track(ann);
-        }
     }
 
     private void Canvas_MouseMove(object sender, MouseEventArgs e)
@@ -160,9 +177,12 @@ public partial class EditorWindow : Window
             return;
         }
 
-        if (!_isDrawing && _currentTool is not CropTool and not TextTool)
+        if (!_isDrawing && _currentTool is not CropTool)
         {
-            AnnotationCanvas.Cursor = _manager.HoverCursor(cur);
+            var cur2 = _manager.HoverCursor(cur);
+            if (cur2 == Cursors.Cross && _currentTool is TextTool)
+                cur2 = Cursors.IBeam;
+            AnnotationCanvas.Cursor = cur2;
             return;
         }
 
@@ -182,7 +202,7 @@ public partial class EditorWindow : Window
         {
             _manager.EndDrag();
             AnnotationCanvas.ReleaseMouseCapture();
-            AnnotationCanvas.Cursor = Cursors.Cross;
+            AnnotationCanvas.Cursor = _currentTool is TextTool ? Cursors.IBeam : Cursors.Cross;
             return;
         }
 
@@ -224,8 +244,23 @@ public partial class EditorWindow : Window
             _hitOnDown = null;
         }
 
-        var ann = _currentTool.Commit(_drawStart, cur);
-        if (ann != null) _manager.Add(ann);
+        if (_currentTool is TextTool textTool)
+        {
+            TextAnnotation? ann = null;
+            ann = textTool.PlaceOn(AnnotationCanvas, _drawStart,
+                onCancel: () => _manager.Delete(ann!),
+                onCommit: committed =>
+                {
+                    _manager.Select(committed);
+                    SwitchToAnnotationTool(_textTool);
+                });
+            _manager.Track(ann);
+            Dispatcher.BeginInvoke(() => AttachEditingHandles(ann));
+            return;
+        }
+
+        var committed = _currentTool.Commit(_drawStart, cur);
+        if (committed != null) _manager.Add(committed);
     }
 
     // ── Zoom ──────────────────────────────────────────────────────────────────
@@ -326,8 +361,21 @@ public partial class EditorWindow : Window
             { Save_Click(this, new RoutedEventArgs()); e.Handled = true; }
         else if (e.Key == Key.C && (Keyboard.Modifiers & ModifierKeys.Control) != 0)
             { Copy_Click(this, new RoutedEventArgs()); e.Handled = true; }
-        else if (e.Key == Key.Escape)
+        else if (e.Key == Key.Escape && Keyboard.FocusedElement is not TextBox)
             { _manager.Deselect(); e.Handled = true; }
+    }
+
+    private void AttachEditingHandles(TextAnnotation ann)
+    {
+        if (ann.Element is not FrameworkElement fe) return;
+        ann.End = new Point(Canvas.GetLeft(fe) + fe.ActualWidth, Canvas.GetTop(fe) + fe.ActualHeight);
+        _manager.Select(ann);
+        fe.SizeChanged += (_, _) =>
+        {
+            if (!ann.IsEditing) return;
+            ann.End = new Point(Canvas.GetLeft(fe) + fe.ActualWidth, Canvas.GetTop(fe) + fe.ActualHeight);
+            _manager.UpdateHandles();
+        };
     }
 
     // ── Redraw / Render ───────────────────────────────────────────────────────
@@ -336,6 +384,11 @@ public partial class EditorWindow : Window
     {
         if (_manager.Selected == null) return;
         var ann = _manager.Selected;
+        if (ann is TextAnnotation { IsEditing: true })
+        {
+            _textTool.UpdateEditingTextBox();
+            return;
+        }
         ann.Tool.ApplyTo(ann);
         int idx = AnnotationCanvas.Children.IndexOf(ann.Element);
         AnnotationCanvas.Children.Remove(ann.Element);
