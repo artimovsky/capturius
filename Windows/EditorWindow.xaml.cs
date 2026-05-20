@@ -1,8 +1,10 @@
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 using Microsoft.Win32;
@@ -27,14 +29,13 @@ public partial class EditorWindow : Window
     private Annotation? _hitOnDown;
     private bool       _switchingTool;
 
-    private System.Windows.Rect _cropRect;
-    private Rectangle?          _cropBorder;
+    private readonly Stack<Action> _undoStack = new();
 
     private readonly AnnotationManager _manager;
     private readonly ArrowTool         _arrowTool;
     private readonly RectTool          _rectTool;
     private readonly TextTool          _textTool;
-    private readonly CropTool          _cropTool;
+    private readonly SelectTool        _selectTool;
 
     public EditorWindow(BitmapSource bitmapSource)
     {
@@ -47,12 +48,14 @@ public partial class EditorWindow : Window
         _arrowTool       = new ArrowTool(settings);
         _rectTool        = new RectTool(settings);
         _textTool        = new TextTool(settings);
-        _cropTool        = new CropTool();
+        _selectTool      = new SelectTool();
+        _selectTool.CropRequested += ApplyCropToSelection;
+        _selectTool.BlurRequested += ApplyBlurToSelection;
 
         foreach (var t in new ITool[] { _arrowTool, _rectTool, _textTool })
             t.PropertiesChanged += RedrawSelected;
 
-        _currentTool = _arrowTool;
+        _currentTool = _selectTool;
         _manager     = new AnnotationManager(AnnotationCanvas);
 
         MainImage.Source        = bitmapSource;
@@ -69,25 +72,28 @@ public partial class EditorWindow : Window
 
     private void Tool_Checked(object sender, RoutedEventArgs e)
     {
-        if (BtnApplyCrop == null || _switchingTool) return;
+        if (_manager == null || _switchingTool) return;
 
         var tag = ((ToggleButton)sender).Tag!.ToString()!;
         UncheckOtherTools((ToggleButton)sender);
 
         _currentTool = tag switch
         {
-            "Arrow" => _arrowTool,
-            "Rect"  => _rectTool,
-            "Text"  => _textTool,
-            "Crop"  => _cropTool,
-            _       => _arrowTool,
+            "Arrow"  => _arrowTool,
+            "Rect"   => _rectTool,
+            "Text"   => _textTool,
+            "Select" => _selectTool,
+            _        => _arrowTool,
         };
 
-        ToolPropertiesHost.Content     = _currentTool.PropertiesPanel;
-        BtnApplyCrop.Visibility        = tag == "Crop" ? Visibility.Visible : Visibility.Collapsed;
-        AnnotationCanvas.Cursor        = tag == "Text" ? Cursors.IBeam : Cursors.Cross;
+        ToolPropertiesHost.Content = _currentTool.PropertiesPanel;
+        AnnotationCanvas.Cursor    = tag == "Text" ? Cursors.IBeam : Cursors.Cross;
 
-        if (tag != "Crop") RemoveCropPreview();
+        if (tag != "Select")
+        {
+            var existing = _manager.Annotations.OfType<SelectAnnotation>().FirstOrDefault();
+            if (existing != null) _manager.Delete(existing);
+        }
         _manager.Deselect();
     }
 
@@ -97,14 +103,14 @@ public partial class EditorWindow : Window
         ToolPropertiesHost.Content = tool.PropertiesPanel;
 
         _switchingTool = true;
-        foreach (var btn in new[] { BtnArrow, BtnRect, BtnText, BtnCrop })
+        foreach (var btn in new[] { BtnArrow, BtnRect, BtnText, BtnSelect })
             if (btn != null) btn.IsChecked = btn.Tag?.ToString() == tool.Name;
         _switchingTool = false;
     }
 
     private void UncheckOtherTools(ToggleButton active)
     {
-        foreach (var btn in new[] { BtnArrow, BtnRect, BtnText, BtnCrop })
+        foreach (var btn in new[] { BtnArrow, BtnRect, BtnText, BtnSelect })
             if (btn != null && btn != active) btn.IsChecked = false;
     }
 
@@ -141,27 +147,24 @@ public partial class EditorWindow : Window
             }
         }
 
-        if (_currentTool is not CropTool)
+        if (_manager.TryBeginDrag(pos))
         {
-            if (_manager.TryBeginDrag(pos))
-            {
-                AnnotationCanvas.Cursor = _manager.DragCursor;
-                AnnotationCanvas.CaptureMouse();
-                return;
-            }
+            AnnotationCanvas.Cursor = _manager.DragCursor;
+            AnnotationCanvas.CaptureMouse();
+            return;
+        }
 
-            var hit = _manager.HitTest(pos);
-            if (hit == _manager.Selected && hit != null)
-            {
-                _manager.BeginMove(pos);
-                AnnotationCanvas.Cursor = _manager.DragCursor;
-                AnnotationCanvas.CaptureMouse();
-                return;
-            }
+        var hit = _manager.HitTest(pos);
+        if (hit == _manager.Selected && hit != null)
+        {
+            _manager.BeginMove(pos);
+            AnnotationCanvas.Cursor = _manager.DragCursor;
+            AnnotationCanvas.CaptureMouse();
+            return;
         }
 
         _manager.Deselect();
-        _hitOnDown = _currentTool is CropTool ? null : _manager.HitTest(pos);
+        _hitOnDown = _manager.HitTest(pos);
         _drawStart = pos;
         _isDrawing = true;
         AnnotationCanvas.CaptureMouse();
@@ -177,7 +180,7 @@ public partial class EditorWindow : Window
             return;
         }
 
-        if (!_isDrawing && _currentTool is not CropTool)
+        if (!_isDrawing)
         {
             var cur2 = _manager.HoverCursor(cur);
             if (cur2 == Cursors.Cross && _currentTool is TextTool)
@@ -218,14 +221,19 @@ public partial class EditorWindow : Window
 
         var cur = e.GetPosition(AnnotationCanvas);
 
-        if (_currentTool is CropTool)
+        if (_currentTool is SelectTool)
         {
-            var r = ShapeHelper.NormRect(_drawStart, cur);
-            if (r.Width > 4 && r.Height > 4)
+            var existing = _manager.Annotations.OfType<SelectAnnotation>().FirstOrDefault();
+            var newSel   = _currentTool.Commit(_drawStart, cur);
+            if (newSel != null)
             {
-                _cropRect   = r;
-                _cropBorder = _cropTool.MakeCropRect(_drawStart, cur);
-                AnnotationCanvas.Children.Add(_cropBorder);
+                if (existing != null) _manager.Delete(existing);
+                _manager.Add(newSel);
+                _manager.Select(newSel);
+            }
+            else if (existing != null)
+            {
+                _manager.Delete(existing);
             }
             return;
         }
@@ -253,6 +261,7 @@ public partial class EditorWindow : Window
                 {
                     _manager.Select(committed);
                     SwitchToAnnotationTool(_textTool);
+                    PushAnnotationUndo(committed);
                 });
             _manager.Track(ann);
             Dispatcher.BeginInvoke(() => AttachEditingHandles(ann));
@@ -260,7 +269,11 @@ public partial class EditorWindow : Window
         }
 
         var committed = _currentTool.Commit(_drawStart, cur);
-        if (committed != null) _manager.Add(committed);
+        if (committed != null)
+        {
+            _manager.Add(committed);
+            PushAnnotationUndo(committed);
+        }
     }
 
     // ── Zoom ──────────────────────────────────────────────────────────────────
@@ -296,39 +309,116 @@ public partial class EditorWindow : Window
         ZoomLabel.Text       = $"{(int)Math.Round(_zoomLevel * 100)}%";
     }
 
-    // ── Crop ──────────────────────────────────────────────────────────────────
+    // ── Selection image operations ────────────────────────────────────────────
 
-    private void RemoveCropPreview()
+    private void ApplyCropToSelection()
     {
-        if (_cropBorder == null) return;
-        AnnotationCanvas.Children.Remove(_cropBorder);
-        _cropBorder = null;
-    }
-
-    private void ApplyCrop_Click(object sender, RoutedEventArgs e)
-    {
-        if (_cropBorder == null || _cropRect.Width < 4 || _cropRect.Height < 4) return;
-
-        int x = Math.Max(0, (int)_cropRect.X);
-        int y = Math.Max(0, (int)_cropRect.Y);
-        int w = Math.Min((int)_cropRect.Width,  _bitmapSource.PixelWidth  - x);
-        int h = Math.Min((int)_cropRect.Height, _bitmapSource.PixelHeight - y);
+        if (_manager.Selected is not SelectAnnotation ann) return;
+        PushBitmapUndo();
+        var r = ShapeHelper.NormRect(ann.Start, ann.End);
+        int x = Math.Max(0, (int)r.X);
+        int y = Math.Max(0, (int)r.Y);
+        int w = Math.Min((int)r.Width,  _bitmapSource.PixelWidth  - x);
+        int h = Math.Min((int)r.Height, _bitmapSource.PixelHeight - y);
         if (w <= 0 || h <= 0) return;
 
         _bitmapSource           = new CroppedBitmap(_bitmapSource, new Int32Rect(x, y, w, h));
         MainImage.Source        = _bitmapSource;
         AnnotationCanvas.Width  = w;
         AnnotationCanvas.Height = h;
-
         _manager.Clear();
-        _cropBorder             = null;
-        BtnApplyCrop.Visibility = Visibility.Collapsed;
-        BtnArrow.IsChecked      = true;
+    }
+
+    private void ApplyBlurToSelection(double percent)
+    {
+        if (_manager.Selected is not SelectAnnotation ann) return;
+        PushBitmapUndo();
+        var r = ShapeHelper.NormRect(ann.Start, ann.End);
+        int x = Math.Max(0, (int)r.X);
+        int y = Math.Max(0, (int)r.Y);
+        int w = Math.Min((int)r.Width,  _bitmapSource.PixelWidth  - x);
+        int h = Math.Min((int)r.Height, _bitmapSource.PixelHeight - y);
+        if (w <= 0 || h <= 0) return;
+
+        var region = new CroppedBitmap(_bitmapSource, new Int32Rect(x, y, w, h));
+        var img = new Image
+        {
+            Source = region,
+            Width  = w,
+            Height = h,
+            Effect = new BlurEffect { Radius = percent * 0.3 },
+        };
+        img.Measure(new Size(w, h));
+        img.Arrange(new Rect(0, 0, w, h));
+
+        var blurRtb = new RenderTargetBitmap(w, h, 96, 96, PixelFormats.Pbgra32);
+        blurRtb.Render(img);
+
+        var rtb = new RenderTargetBitmap(
+            _bitmapSource.PixelWidth, _bitmapSource.PixelHeight, 96, 96, PixelFormats.Pbgra32);
+        var dv = new DrawingVisual();
+        using (var dc = dv.RenderOpen())
+        {
+            dc.DrawImage(_bitmapSource,
+                new Rect(0, 0, _bitmapSource.PixelWidth, _bitmapSource.PixelHeight));
+            dc.DrawImage(blurRtb, new Rect(x, y, w, h));
+        }
+        rtb.Render(dv);
+        _bitmapSource    = rtb;
+        MainImage.Source = _bitmapSource;
+    }
+
+    private void DeleteSelection()
+    {
+        if (_manager.Selected is not SelectAnnotation ann) return;
+        PushBitmapUndo();
+        var r = ShapeHelper.NormRect(ann.Start, ann.End);
+        int x = Math.Max(0, (int)r.X);
+        int y = Math.Max(0, (int)r.Y);
+        int w = Math.Min((int)r.Width,  _bitmapSource.PixelWidth  - x);
+        int h = Math.Min((int)r.Height, _bitmapSource.PixelHeight - y);
+        if (w <= 0 || h <= 0) return;
+
+        var rtb = new RenderTargetBitmap(
+            _bitmapSource.PixelWidth, _bitmapSource.PixelHeight, 96, 96, PixelFormats.Pbgra32);
+        var dv = new DrawingVisual();
+        using (var dc = dv.RenderOpen())
+        {
+            dc.DrawImage(_bitmapSource,
+                new Rect(0, 0, _bitmapSource.PixelWidth, _bitmapSource.PixelHeight));
+            dc.DrawRectangle(Brushes.Black, null, new Rect(x, y, w, h));
+        }
+        rtb.Render(dv);
+        _bitmapSource    = rtb;
+        MainImage.Source = _bitmapSource;
     }
 
     // ── Actions ───────────────────────────────────────────────────────────────
 
-    private void Undo_Click(object sender, RoutedEventArgs e) => _manager.Undo();
+    private void Undo_Click(object sender, RoutedEventArgs e) => UndoLastAction();
+
+    private void UndoLastAction()
+    {
+        if (_undoStack.TryPop(out var action))
+            action();
+    }
+
+    private void PushBitmapUndo()
+    {
+        var bmp = _bitmapSource;
+        var w   = AnnotationCanvas.Width;
+        var h   = AnnotationCanvas.Height;
+        _undoStack.Push(() =>
+        {
+            _bitmapSource           = bmp;
+            MainImage.Source        = bmp;
+            AnnotationCanvas.Width  = w;
+            AnnotationCanvas.Height = h;
+        });
+    }
+
+    private void PushAnnotationUndo(Annotation ann) =>
+        _undoStack.Push(() => _manager.Delete(ann));
     private void Copy_Click(object sender, RoutedEventArgs e) => Clipboard.SetImage(RenderToRtb());
 
     private void Save_Click(object sender, RoutedEventArgs e)
@@ -354,9 +444,14 @@ public partial class EditorWindow : Window
     private void OnKeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key == Key.Z && (Keyboard.Modifiers & ModifierKeys.Control) != 0)
-            { _manager.Undo(); e.Handled = true; }
+            { UndoLastAction(); e.Handled = true; }
         else if (e.Key == Key.Delete && _manager.Selected != null)
-            { _manager.Delete(_manager.Selected); e.Handled = true; }
+        {
+            if (_manager.Selected is SelectAnnotation)
+                { DeleteSelection(); e.Handled = true; }
+            else
+                { _manager.Delete(_manager.Selected); e.Handled = true; }
+        }
         else if (e.Key == Key.S && (Keyboard.Modifiers & ModifierKeys.Control) != 0)
             { Save_Click(this, new RoutedEventArgs()); e.Handled = true; }
         else if (e.Key == Key.C && (Keyboard.Modifiers & ModifierKeys.Control) != 0)

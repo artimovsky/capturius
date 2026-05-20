@@ -39,6 +39,12 @@ public sealed class RectAnnotation : Annotation
     public override bool IsRectLike   => true;
 }
 
+public sealed class SelectAnnotation : Annotation
+{
+    public override bool IsSelectable => true;
+    public override bool IsRectLike   => true;
+}
+
 public sealed class TextAnnotation : Annotation
 {
     public string            Text                 { get; set; } = "";
