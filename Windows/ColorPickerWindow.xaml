@@ -17,7 +17,8 @@
         <!-- Перехват кликов мыши -->
         <Canvas x:Name="OverlayCanvas"
                 Background="Transparent"
-                MouseLeftButtonDown="Canvas_MouseLeftButtonDown"/>
+                MouseLeftButtonDown="Canvas_MouseLeftButtonDown"
+                MouseRightButtonDown="Canvas_MouseRightButtonDown"/>
 
         <!-- Лупа -->
         <Canvas IsHitTestVisible="False">
@@ -69,7 +70,7 @@
         <!-- Подсказка снизу -->
         <StackPanel VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,24">
             <Border Background="#CC1E1E2E" CornerRadius="6" Padding="12,6">
-                <TextBlock Text="Click / Enter — copy HEX  •  Arrows — fine-tune  •  ESC — cancel"
+                <TextBlock Text="Click / Enter — copy HEX  •  Arrows — fine-tune  •  RMB / ESC — cancel"
                            Foreground="#CDD6F4" FontSize="13" FontFamily="Segoe UI"
                            HorizontalAlignment="Center"/>
             </Border>

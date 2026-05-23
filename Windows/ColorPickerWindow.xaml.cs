@@ -138,6 +138,8 @@ public partial class ColorPickerWindow : Window
         PickColor();
     }
 
+    private void Canvas_MouseRightButtonDown(object sender, MouseButtonEventArgs e) => Close();
+
     private void PickColor()
     {
         int physX = Math.Clamp((int)(_cursor.X * _dpiScale), 0, _screenshotBitmap.Width  - 1);

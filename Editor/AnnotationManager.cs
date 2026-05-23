@@ -121,13 +121,13 @@ public sealed class AnnotationManager
         if (!Selected.IsRectLike)
         {
             var d0 = Selected.Start - pos;
-            if (Math.Sqrt(d0.X * d0.X + d0.Y * d0.Y) <= 8) return Cursors.SizeNWSE;
+            if (Math.Sqrt(d0.X * d0.X + d0.Y * d0.Y) <= 10) return Cursors.SizeNWSE;
             var d1 = Selected.End - pos;
-            if (Math.Sqrt(d1.X * d1.X + d1.Y * d1.Y) <= 8) return Cursors.SizeNESW;
+            if (Math.Sqrt(d1.X * d1.X + d1.Y * d1.Y) <= 10) return Cursors.SizeNESW;
         }
         else
         {
-            int ci = FindNearestHandle(pos, Selected, 8);
+            int ci = FindNearestHandle(pos, Selected, 10);
             if (ci >= 0)
                 return ci switch
                 {
@@ -154,7 +154,7 @@ public sealed class AnnotationManager
             for (int i = 0; i < 2; i++)
             {
                 var d = eps[i] - pos;
-                if (Math.Sqrt(d.X * d.X + d.Y * d.Y) <= 8)
+                if (Math.Sqrt(d.X * d.X + d.Y * d.Y) <= 10)
                 {
                     IsDragging      = true;
                     _dragMode       = "resize";
@@ -169,7 +169,7 @@ public sealed class AnnotationManager
         }
         else
         {
-            int ci = FindNearestHandle(pos, Selected, 8);
+            int ci = FindNearestHandle(pos, Selected, 10);
             if (ci >= 0)
             {
                 IsDragging      = true;
@@ -301,14 +301,14 @@ public sealed class AnnotationManager
         {
             var h = new Ellipse
             {
-                Width            = 8, Height = 8,
+                Width            = 12, Height = 12,
                 Fill             = Brushes.White,
                 Stroke           = new SolidColorBrush(Color.FromRgb(0x89, 0xB4, 0xFA)),
                 StrokeThickness  = 1.5,
                 IsHitTestVisible = false,
             };
-            Canvas.SetLeft(h, pt.X - 4);
-            Canvas.SetTop(h, pt.Y - 4);
+            Canvas.SetLeft(h, pt.X - 6);
+            Canvas.SetTop(h, pt.Y - 6);
             _canvas.Children.Add(h);
             _handles.Add(h);
         }

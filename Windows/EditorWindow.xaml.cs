@@ -268,10 +268,15 @@ public partial class EditorWindow : Window
             return;
         }
 
+        var drag = cur - _drawStart;
+        if (Math.Sqrt(drag.X * drag.X + drag.Y * drag.Y) < 5) return;
+
         var committed = _currentTool.Commit(_drawStart, cur);
         if (committed != null)
         {
             _manager.Add(committed);
+            _manager.Select(committed);
+            SwitchToAnnotationTool(_currentTool);
             PushAnnotationUndo(committed);
         }
     }

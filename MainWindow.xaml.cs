@@ -107,6 +107,8 @@ public partial class MainWindow : Window
     {
         _isExiting = true;
         _trayIcon.Dispose();
+        foreach (var w in Application.Current.Windows.OfType<Window>().Where(w => w != this).ToList())
+            w.Close();
         Close();
     }
 
