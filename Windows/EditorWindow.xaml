@@ -249,6 +249,7 @@
                         MouseLeftButtonDown="Canvas_MouseDown"
                         MouseMove="Canvas_MouseMove"
                         MouseLeftButtonUp="Canvas_MouseUp"/>
+                <Canvas x:Name="CropHandleCanvas" Background="{x:Null}"/>
             </Grid>
         </ScrollViewer>
     </DockPanel>

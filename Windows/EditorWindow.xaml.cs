@@ -31,6 +31,15 @@ public partial class EditorWindow : Window
 
     private readonly Stack<Action> _undoStack = new();
 
+    private enum CropHandle { TL, TC, TR, ML, MR, BL, BC, BR }
+    private readonly Dictionary<CropHandle, Rectangle> _cropHandles = new();
+    private Rectangle? _cropPreview;
+    private bool       _isCropDragging;
+    private CropHandle _activeCropHandle;
+    private Point      _cropDragStart;
+    private double     _cropOrigW, _cropOrigH;
+    private double     _cropNewX, _cropNewY, _cropNewW, _cropNewH;
+
     private readonly AnnotationManager _manager;
     private readonly ArrowTool         _arrowTool;
     private readonly RectTool          _rectTool;
@@ -66,6 +75,7 @@ public partial class EditorWindow : Window
 
         ToolPropertiesHost.Content = _currentTool.PropertiesPanel;
         SetZoom(1.0);
+        InitCropHandles();
 
         PreviewKeyDown += OnKeyDown;
     }
@@ -435,6 +445,7 @@ public partial class EditorWindow : Window
             MainImage.Source        = bmp;
             AnnotationCanvas.Width  = w;
             AnnotationCanvas.Height = h;
+            UpdateCropHandlePositions();
         });
     }
 
@@ -492,6 +503,171 @@ public partial class EditorWindow : Window
             ann.End = new Point(Canvas.GetLeft(fe) + fe.ActualWidth, Canvas.GetTop(fe) + fe.ActualHeight);
             _manager.UpdateHandles();
         };
+    }
+
+    // ── Canvas crop handles ───────────────────────────────────────────────────
+
+    private static Cursor CursorForCropHandle(CropHandle ch) => ch switch
+    {
+        CropHandle.TL or CropHandle.BR => Cursors.SizeNWSE,
+        CropHandle.TR or CropHandle.BL => Cursors.SizeNESW,
+        CropHandle.TC or CropHandle.BC => Cursors.SizeNS,
+        _                              => Cursors.SizeWE,
+    };
+
+    private void InitCropHandles()
+    {
+        foreach (CropHandle ch in Enum.GetValues<CropHandle>())
+        {
+            var r = new Rectangle
+            {
+                Width           = 12,
+                Height          = 12,
+                Fill            = Brushes.White,
+                Stroke          = new SolidColorBrush(Color.FromRgb(137, 180, 250)),
+                StrokeThickness = 1.5,
+                Cursor          = CursorForCropHandle(ch),
+                Tag             = ch,
+            };
+            r.MouseLeftButtonDown += CropHandle_MouseDown;
+            r.MouseMove           += CropHandle_MouseMove;
+            r.MouseLeftButtonUp   += CropHandle_MouseUp;
+            CropHandleCanvas.Children.Add(r);
+            _cropHandles[ch] = r;
+        }
+        UpdateCropHandlePositions();
+    }
+
+    private void UpdateCropHandlePositions()
+    {
+        double w = AnnotationCanvas.Width;
+        double h = AnnotationCanvas.Height;
+        const double half = 6;
+
+        void Place(CropHandle ch, double x, double y)
+        {
+            Canvas.SetLeft(_cropHandles[ch], x - half);
+            Canvas.SetTop (_cropHandles[ch], y - half);
+        }
+
+        Place(CropHandle.TL, 0,   0);
+        Place(CropHandle.TC, w/2, 0);
+        Place(CropHandle.TR, w,   0);
+        Place(CropHandle.ML, 0,   h/2);
+        Place(CropHandle.MR, w,   h/2);
+        Place(CropHandle.BL, 0,   h);
+        Place(CropHandle.BC, w/2, h);
+        Place(CropHandle.BR, w,   h);
+    }
+
+    private void CropHandle_MouseDown(object sender, MouseButtonEventArgs e)
+    {
+        _activeCropHandle = (CropHandle)((Rectangle)sender).Tag!;
+        _cropDragStart    = e.GetPosition(AnnotationCanvas);
+        _cropOrigW        = AnnotationCanvas.Width;
+        _cropOrigH        = AnnotationCanvas.Height;
+        _cropNewX = _cropNewY = 0;
+        _cropNewW = _cropOrigW;
+        _cropNewH = _cropOrigH;
+        _isCropDragging   = true;
+        ((Rectangle)sender).CaptureMouse();
+        e.Handled = true;
+    }
+
+    private void CropHandle_MouseMove(object sender, MouseEventArgs e)
+    {
+        if (!_isCropDragging) return;
+        var cur  = e.GetPosition(AnnotationCanvas);
+        double dx = cur.X - _cropDragStart.X;
+        double dy = cur.Y - _cropDragStart.Y;
+
+        double x = 0, y = 0, w = _cropOrigW, h = _cropOrigH;
+        switch (_activeCropHandle)
+        {
+            case CropHandle.TL:
+                x = Math.Clamp(dx, 0, _cropOrigW - 10); y = Math.Clamp(dy, 0, _cropOrigH - 10);
+                w = _cropOrigW - x; h = _cropOrigH - y; break;
+            case CropHandle.TC:
+                y = Math.Clamp(dy, 0, _cropOrigH - 10); h = _cropOrigH - y; break;
+            case CropHandle.TR:
+                y = Math.Clamp(dy, 0, _cropOrigH - 10); h = _cropOrigH - y;
+                w = Math.Clamp(_cropOrigW + dx, 10, _cropOrigW); break;
+            case CropHandle.ML:
+                x = Math.Clamp(dx, 0, _cropOrigW - 10); w = _cropOrigW - x; break;
+            case CropHandle.MR:
+                w = Math.Clamp(_cropOrigW + dx, 10, _cropOrigW); break;
+            case CropHandle.BL:
+                x = Math.Clamp(dx, 0, _cropOrigW - 10); w = _cropOrigW - x;
+                h = Math.Clamp(_cropOrigH + dy, 10, _cropOrigH); break;
+            case CropHandle.BC:
+                h = Math.Clamp(_cropOrigH + dy, 10, _cropOrigH); break;
+            case CropHandle.BR:
+                w = Math.Clamp(_cropOrigW + dx, 10, _cropOrigW);
+                h = Math.Clamp(_cropOrigH + dy, 10, _cropOrigH); break;
+        }
+        _cropNewX = x; _cropNewY = y; _cropNewW = w; _cropNewH = h;
+        UpdateCropPreview();
+        e.Handled = true;
+    }
+
+    private void CropHandle_MouseUp(object sender, MouseButtonEventArgs e)
+    {
+        if (!_isCropDragging) return;
+        ((Rectangle)sender).ReleaseMouseCapture();
+        _isCropDragging = false;
+        RemoveCropPreview();
+
+        bool changed = _cropNewX > 0.5 || _cropNewY > 0.5
+                    || _cropNewW < _cropOrigW - 0.5
+                    || _cropNewH < _cropOrigH - 0.5;
+        if (changed)
+        {
+            PushBitmapUndo();
+            ApplyCanvasCrop((int)Math.Round(_cropNewX), (int)Math.Round(_cropNewY),
+                            (int)Math.Round(_cropNewW), (int)Math.Round(_cropNewH));
+        }
+        e.Handled = true;
+    }
+
+    private void UpdateCropPreview()
+    {
+        if (_cropPreview == null)
+        {
+            _cropPreview = new Rectangle
+            {
+                Stroke           = new SolidColorBrush(Color.FromRgb(137, 180, 250)),
+                StrokeThickness  = 1.5,
+                StrokeDashArray  = new DoubleCollection { 6, 3 },
+                Fill             = new SolidColorBrush(Color.FromArgb(25, 137, 180, 250)),
+                IsHitTestVisible = false,
+            };
+            CropHandleCanvas.Children.Add(_cropPreview);
+        }
+        Canvas.SetLeft(_cropPreview, _cropNewX);
+        Canvas.SetTop (_cropPreview, _cropNewY);
+        _cropPreview.Width  = _cropNewW;
+        _cropPreview.Height = _cropNewH;
+    }
+
+    private void RemoveCropPreview()
+    {
+        if (_cropPreview == null) return;
+        CropHandleCanvas.Children.Remove(_cropPreview);
+        _cropPreview = null;
+    }
+
+    private void ApplyCanvasCrop(int x, int y, int w, int h)
+    {
+        w = Math.Min(w, _bitmapSource.PixelWidth  - x);
+        h = Math.Min(h, _bitmapSource.PixelHeight - y);
+        if (w < 1 || h < 1) return;
+
+        _bitmapSource           = new CroppedBitmap(_bitmapSource, new Int32Rect(x, y, w, h));
+        MainImage.Source        = _bitmapSource;
+        AnnotationCanvas.Width  = w;
+        AnnotationCanvas.Height = h;
+        _manager.Clear();
+        UpdateCropHandlePositions();
     }
 
     // ── Redraw / Render ───────────────────────────────────────────────────────
