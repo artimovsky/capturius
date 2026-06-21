@@ -11,10 +11,8 @@
         WindowStartupLocation="Manual"
         Left="0" Top="0">
     <Grid>
-        <!-- Скриншот экрана как фон -->
         <Image x:Name="ScreenshotImage" Stretch="Fill"/>
 
-        <!-- Тёмный оверлей и выделение -->
         <Canvas x:Name="OverlayCanvas"
                 Background="Transparent"
                 MouseLeftButtonDown="Canvas_MouseLeftButtonDown"
@@ -29,9 +27,14 @@
                        Fill="Transparent"
                        Visibility="Collapsed"
                        IsHitTestVisible="False"/>
+            <Rectangle x:Name="SnapBorder"
+                       Stroke="#89B4FA"
+                       StrokeThickness="2"
+                       Fill="Transparent"
+                       Visibility="Collapsed"
+                       IsHitTestVisible="False"/>
         </Canvas>
 
-        <!-- Лупа (не перехватывает события мыши) -->
         <Canvas IsHitTestVisible="False">
             <Border x:Name="MagnifierPanel"
                     Width="200" Height="200"
@@ -40,15 +43,12 @@
                     CornerRadius="4"
                     Visibility="Collapsed">
                 <Canvas Background="Black" ClipToBounds="True" Width="200" Height="200">
-                    <!-- Изображение позиционируется в коде так, чтобы курсор всегда был в точке 100,100 -->
                     <Image x:Name="MagnifierImage" Stretch="Fill"
                            RenderOptions.BitmapScalingMode="NearestNeighbor"/>
-                    <!-- Перекрестие всегда в центре лупы -->
                     <Line X1="100" Y1="0" X2="100" Y2="200"
                           Stroke="#FF4444" StrokeThickness="1" Opacity="0.8"/>
                     <Line X1="0" Y1="100" X2="200" Y2="100"
                           Stroke="#FF4444" StrokeThickness="1" Opacity="0.8"/>
-                    <!-- Координаты внизу -->
                     <TextBlock x:Name="MagnifierCoords"
                                Width="200" TextAlignment="Center"
                                Foreground="White" FontSize="11" FontFamily="Segoe UI"
@@ -58,12 +58,10 @@
             </Border>
         </Canvas>
 
-        <!-- Подсказка снизу -->
         <StackPanel VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,24">
             <Border Background="#CC1E1E2E" CornerRadius="6" Padding="12,6">
                 <StackPanel>
                     <TextBlock x:Name="HintText"
-                               Text="Click to set first point  •  ESC or Right Click — cancel"
                                Foreground="#CDD6F4" FontSize="13" FontFamily="Segoe UI"
                                HorizontalAlignment="Center"/>
                     <TextBlock x:Name="SizeText"

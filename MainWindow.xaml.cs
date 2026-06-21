@@ -285,6 +285,36 @@ public partial class MainWindow : Window
         MoveBackOnScreen();
     }
 
+    private async void CaptureScroll_Click(object sender, RoutedEventArgs e)
+    {
+        await MoveOffScreenAsync();
+
+        // Step 1: user picks a window to scroll-capture
+        var overlay = new OverlayWindow(snapMode: true);
+        overlay.ShowDialog();
+
+        if (overlay.CapturedRegion.IsEmpty)
+        {
+            MoveBackOnScreen();
+            return;
+        }
+
+        // Step 2: scroll-capture that region
+        var scroll = new ScrollCaptureWindow(overlay.CapturedRegion);
+        scroll.ShowDialog();
+
+        if (scroll.CapturedBitmap is { } bitmap)
+        {
+            var source = ScreenCaptureService.ToBitmapSource(bitmap);
+            bitmap.Dispose();
+            OpenEditor(source);
+        }
+        else
+        {
+            MoveBackOnScreen();
+        }
+    }
+
     private async void CaptureRegion_Click(object sender, RoutedEventArgs e)
     {
         await MoveOffScreenAsync();

@@ -47,6 +47,14 @@ public static class ScreenCaptureService
         return bmp;
     }
 
+    public static Bitmap CaptureRegion(System.Drawing.Rectangle r)
+    {
+        var bmp = new Bitmap(r.Width, r.Height, PixelFormat.Format32bppArgb);
+        using var g = System.Drawing.Graphics.FromImage(bmp);
+        g.CopyFromScreen(r.X, r.Y, 0, 0, r.Size, CopyPixelOperation.SourceCopy);
+        return bmp;
+    }
+
     public static Bitmap CaptureWorkArea()
     {
         // WorkArea is in WPF logical units — multiply by DPI to get physical pixels
