@@ -95,7 +95,7 @@ public partial class MainWindow : Window
 
     private void BuyMeCoffee_Click(object sender, RoutedEventArgs e) =>
         System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
-            "https://buymeacoffee.com/capturius") { UseShellExecute = true });
+            "https://paypal.me/DenisArtimovskii") { UseShellExecute = true });
 
     private void Settings_Click(object sender, RoutedEventArgs e)
     {

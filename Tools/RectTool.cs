@@ -191,9 +191,8 @@ public sealed class RectTool : ITool
     private static UIElement Render(Point start, Point end,
         Color fillColor, Color borderColor, double borderThickness, double cornerRadius, double opacity, double shadow)
     {
-        var r    = ShapeHelper.NormRect(start, end);
-        var fill = Color.FromArgb((byte)(fillColor.A * opacity / 100.0), fillColor.R, fillColor.G, fillColor.B);
-        var bgBrush     = new SolidColorBrush(fill);        bgBrush.Freeze();
+        var r           = ShapeHelper.NormRect(start, end);
+        var bgBrush     = new SolidColorBrush(fillColor);   bgBrush.Freeze();
         var borderBrush = new SolidColorBrush(borderColor); borderBrush.Freeze();
 
         var visual = new Border
@@ -206,38 +205,34 @@ public sealed class RectTool : ITool
             CornerRadius    = new CornerRadius(cornerRadius),
         };
 
-        if (shadow <= 0)
+        // Fully opaque or no shadow: DropShadowEffect is safe
+        if (shadow <= 0 || opacity >= 100)
         {
+            visual.Opacity = opacity / 100.0;
+            if (shadow > 0) visual.Effect = ShapeHelper.MakeShadow(shadow);
             Canvas.SetLeft(visual, r.X);
-            Canvas.SetTop(visual, r.Y);
+            Canvas.SetTop(visual,  r.Y);
             return visual;
         }
 
-        if (fill.A == 0 || fill.A >= 255)
-        {
-            visual.Effect = ShapeHelper.MakeShadow(shadow);
-            Canvas.SetLeft(visual, r.X);
-            Canvas.SetTop(visual, r.Y);
-            return visual;
-        }
-
-        // Semi-transparent fill: DropShadowEffect on the element itself bleeds through the
-        // fill and darkens it. Fix: compute an outer-glow bitmap via pixel manipulation —
-        // blur the element's solid shape, then erase the interior, leaving shadow only outside.
+        // Semi-transparent + shadow: outer-glow bitmap prevents shadow bleeding through fill.
+        // Opacity on the container so shadow and element fade together.
+        const double renderScale = 4.0;
+        const double renderDpi   = 96 * renderScale;
         int pad = (int)(shadow * 2 + 4);
         int bw  = (int)Math.Ceiling(r.Width)  + pad * 2;
         int bh  = (int)Math.Ceiling(r.Height) + pad * 2;
+        int pbw = (int)(bw * renderScale);
+        int pbh = (int)(bh * renderScale);
 
-        // 1. Render solid shape (white on transparent) into RTB
-        var shapeRtb = new RenderTargetBitmap(bw, bh, 96, 96, PixelFormats.Pbgra32);
+        var shapeRtb = new RenderTargetBitmap(pbw, pbh, renderDpi, renderDpi, PixelFormats.Pbgra32);
         var shapeVis = new DrawingVisual();
         using (var dc = shapeVis.RenderOpen())
             dc.DrawRoundedRectangle(Brushes.White, null,
                 new Rect(pad, pad, r.Width, r.Height), cornerRadius, cornerRadius);
         shapeRtb.Render(shapeVis);
 
-        // 2. Blur the shape
-        var blurRtb = new RenderTargetBitmap(bw, bh, 96, 96, PixelFormats.Pbgra32);
+        var blurRtb = new RenderTargetBitmap(pbw, pbh, renderDpi, renderDpi, PixelFormats.Pbgra32);
         var blurImg = new Image
         {
             Source = shapeRtb, Width = bw, Height = bh,
@@ -247,10 +242,9 @@ public sealed class RectTool : ITool
         blurImg.Arrange(new Rect(0, 0, bw, bh));
         blurRtb.Render(blurImg);
 
-        // 3. Pixel pass: erase interior (where shape was), tint rest black at 50% opacity
-        int stride  = bw * 4;
-        var blurPx  = new byte[bh * stride];
-        var shapePx = new byte[bh * stride];
+        int stride  = pbw * 4;
+        var blurPx  = new byte[pbh * stride];
+        var shapePx = new byte[pbh * stride];
         blurRtb.CopyPixels(blurPx, stride, 0);
         shapeRtb.CopyPixels(shapePx, stride, 0);
 
@@ -258,25 +252,33 @@ public sealed class RectTool : ITool
         {
             byte shapeA = shapePx[i + 3];
             byte blurA  = blurPx[i + 3];
-            blurPx[i]     = 0;                                          // B = black
-            blurPx[i + 1] = 0;                                          // G = black
-            blurPx[i + 2] = 0;                                          // R = black
-            blurPx[i + 3] = shapeA > 0 ? (byte)0 : (byte)(blurA / 2); // erase interior, 50% shadow
+            blurPx[i]     = 0;
+            blurPx[i + 1] = 0;
+            blurPx[i + 2] = 0;
+            blurPx[i + 3] = shapeA > 0 ? (byte)0 : (byte)(blurA / 2);
         }
 
-        var glowBitmap = BitmapSource.Create(bw, bh, 96, 96, PixelFormats.Pbgra32, null, blurPx, stride);
-        var glowImage  = new Image { Source = glowBitmap, Width = bw, Height = bh, Stretch = Stretch.None };
+        var glowBitmap = BitmapSource.Create(pbw, pbh, renderDpi, renderDpi, PixelFormats.Pbgra32, null, blurPx, stride);
+        var glowImage  = new Image { Source = glowBitmap, Width = bw, Height = bh, Stretch = Stretch.Fill };
 
-        var container = new Canvas { Width = r.Width, Height = r.Height, ClipToBounds = false, Background = Brushes.Transparent };
+        visual.Opacity = opacity / 100.0;
+
+        var container = new Canvas
+        {
+            Width        = r.Width,
+            Height       = r.Height,
+            ClipToBounds = false,
+            Background   = Brushes.Transparent,
+        };
         Canvas.SetLeft(glowImage, -pad);
-        Canvas.SetTop(glowImage, -pad);
+        Canvas.SetTop(glowImage,  -pad);
         container.Children.Add(glowImage);
         Canvas.SetLeft(visual, 0);
-        Canvas.SetTop(visual, 0);
+        Canvas.SetTop(visual,  0);
         container.Children.Add(visual);
 
         Canvas.SetLeft(container, r.X);
-        Canvas.SetTop(container, r.Y);
+        Canvas.SetTop(container,  r.Y);
         return container;
     }
 }

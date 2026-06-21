@@ -12,6 +12,7 @@ public abstract class Annotation
     public          Point     End     { get; set; }
 
     public virtual bool IsSelectable => false;
+    public virtual bool IsResizable  => true;
     public virtual bool IsRectLike   => false;
 }
 
@@ -36,6 +37,22 @@ public sealed class RectAnnotation : Annotation
     public double Shadow          { get; set; }
 
     public override bool IsSelectable => true;
+    public override bool IsRectLike   => true;
+}
+
+public sealed class NumberAnnotation : Annotation
+{
+    public int    Number          { get; set; }
+    public double Size            { get; set; } = 30;
+    public Color  FillColor       { get; set; }
+    public Color  BorderColor     { get; set; }
+    public Color  FontColor       { get; set; } = Colors.White;
+    public double BorderThickness { get; set; }
+    public double Opacity         { get; set; } = 100;
+    public double Shadow          { get; set; }
+
+    public override bool IsSelectable => true;
+    public override bool IsResizable  => false;
     public override bool IsRectLike   => true;
 }
 

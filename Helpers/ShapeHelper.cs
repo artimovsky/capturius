@@ -28,7 +28,7 @@ public static class ShapeHelper
             ShadowDepth = 0,
             Direction   = 315,
             Color       = Colors.Black,
-            Opacity     = 0.5,
+            Opacity     = 0.9,
         };
         fx.Freeze();
         return fx;

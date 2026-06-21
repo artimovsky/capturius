@@ -36,6 +36,7 @@ public partial class EditorWindow : Window
     private readonly RectTool          _rectTool;
     private readonly TextTool          _textTool;
     private readonly SelectTool        _selectTool;
+    private readonly NumberTool        _numberTool;
 
     public EditorWindow(BitmapSource bitmapSource)
     {
@@ -51,8 +52,9 @@ public partial class EditorWindow : Window
         _selectTool      = new SelectTool();
         _selectTool.CropRequested += ApplyCropToSelection;
         _selectTool.BlurRequested += ApplyBlurToSelection;
+        _numberTool      = new NumberTool(settings);
 
-        foreach (var t in new ITool[] { _arrowTool, _rectTool, _textTool })
+        foreach (var t in new ITool[] { _arrowTool, _rectTool, _textTool, _numberTool })
             t.PropertiesChanged += RedrawSelected;
 
         _currentTool = _selectTool;
@@ -83,6 +85,7 @@ public partial class EditorWindow : Window
             "Rect"   => _rectTool,
             "Text"   => _textTool,
             "Select" => _selectTool,
+            "Number" => _numberTool,
             _        => _arrowTool,
         };
 
@@ -103,14 +106,14 @@ public partial class EditorWindow : Window
         ToolPropertiesHost.Content = tool.PropertiesPanel;
 
         _switchingTool = true;
-        foreach (var btn in new[] { BtnArrow, BtnRect, BtnText, BtnSelect })
+        foreach (var btn in new[] { BtnArrow, BtnRect, BtnText, BtnSelect, BtnNumber })
             if (btn != null) btn.IsChecked = btn.Tag?.ToString() == tool.Name;
         _switchingTool = false;
     }
 
     private void UncheckOtherTools(ToggleButton active)
     {
-        foreach (var btn in new[] { BtnArrow, BtnRect, BtnText, BtnSelect })
+        foreach (var btn in new[] { BtnArrow, BtnRect, BtnText, BtnSelect, BtnNumber })
             if (btn != null && btn != active) btn.IsChecked = false;
     }
 
@@ -221,6 +224,33 @@ public partial class EditorWindow : Window
 
         var cur = e.GetPosition(AnnotationCanvas);
 
+        // Short click on an existing annotation → select it instead of drawing
+        if (_hitOnDown != null)
+        {
+            var d = cur - _drawStart;
+            if (Math.Sqrt(d.X * d.X + d.Y * d.Y) < 5)
+            {
+                _manager.Select(_hitOnDown);
+                SwitchToAnnotationTool(_hitOnDown.Tool);
+                _hitOnDown = null;
+                return;
+            }
+            _hitOnDown = null;
+        }
+
+        if (_currentTool is NumberTool numTool)
+        {
+            var numAnn = numTool.CommitAt(cur);
+            if (numAnn != null)
+            {
+                _manager.Add(numAnn);
+                _manager.Select(numAnn);
+                SwitchToAnnotationTool(_numberTool);
+                PushAnnotationUndo(numAnn);
+            }
+            return;
+        }
+
         if (_currentTool is SelectTool)
         {
             var existing = _manager.Annotations.OfType<SelectAnnotation>().FirstOrDefault();
@@ -236,20 +266,6 @@ public partial class EditorWindow : Window
                 _manager.Delete(existing);
             }
             return;
-        }
-
-        // Short click on an existing annotation → select it instead of drawing
-        if (_hitOnDown != null)
-        {
-            var d = cur - _drawStart;
-            if (Math.Sqrt(d.X * d.X + d.Y * d.Y) < 5)
-            {
-                _manager.Select(_hitOnDown);
-                SwitchToAnnotationTool(_hitOnDown.Tool);
-                _hitOnDown = null;
-                return;
-            }
-            _hitOnDown = null;
         }
 
         if (_currentTool is TextTool textTool)

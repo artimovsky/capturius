@@ -118,14 +118,14 @@ public sealed class AnnotationManager
     {
         if (Selected == null) return Cursors.Cross;
 
-        if (!Selected.IsRectLike)
+        if (Selected.IsResizable && !Selected.IsRectLike)
         {
             var d0 = Selected.Start - pos;
             if (Math.Sqrt(d0.X * d0.X + d0.Y * d0.Y) <= 10) return Cursors.SizeNWSE;
             var d1 = Selected.End - pos;
             if (Math.Sqrt(d1.X * d1.X + d1.Y * d1.Y) <= 10) return Cursors.SizeNESW;
         }
-        else
+        else if (Selected.IsResizable)
         {
             int ci = FindNearestHandle(pos, Selected, 10);
             if (ci >= 0)
@@ -148,7 +148,7 @@ public sealed class AnnotationManager
     {
         if (Selected == null) return false;
 
-        if (!Selected.IsRectLike)
+        if (Selected.IsResizable && !Selected.IsRectLike)
         {
             Point[] eps = { Selected.Start, Selected.End };
             for (int i = 0; i < 2; i++)
@@ -167,7 +167,7 @@ public sealed class AnnotationManager
                 }
             }
         }
-        else
+        else if (Selected.IsResizable)
         {
             int ci = FindNearestHandle(pos, Selected, 10);
             if (ci >= 0)
@@ -277,6 +277,47 @@ public sealed class AnnotationManager
     private void ShowHandles(Annotation ann)
     {
         HideHandles();
+        if (!ann.IsResizable)
+        {
+            if (ann.IsRectLike)
+            {
+                var r  = ShapeHelper.NormRect(ann.Start, ann.End);
+                var outline = new Ellipse
+                {
+                    Width           = r.Width  + 6,
+                    Height          = r.Height + 6,
+                    Stroke          = new SolidColorBrush(Color.FromRgb(0x89, 0xB4, 0xFA)),
+                    StrokeThickness = 1.5,
+                    StrokeDashArray = new DoubleCollection { 4, 3 },
+                    Fill            = Brushes.Transparent,
+                    IsHitTestVisible = false,
+                };
+                Canvas.SetLeft(outline, r.X - 3);
+                Canvas.SetTop(outline,  r.Y - 3);
+                _canvas.Children.Add(outline);
+                _handles.Add(outline);
+            }
+            return;
+        }
+        if (ann.IsRectLike)
+        {
+            var ro = ShapeHelper.NormRect(ann.Start, ann.End);
+            var outline = new System.Windows.Shapes.Rectangle
+            {
+                Width           = ro.Width  + 6,
+                Height          = ro.Height + 6,
+                Stroke          = new SolidColorBrush(Color.FromRgb(0x89, 0xB4, 0xFA)),
+                StrokeThickness = 1.5,
+                StrokeDashArray = new DoubleCollection { 4, 3 },
+                Fill            = Brushes.Transparent,
+                IsHitTestVisible = false,
+            };
+            Canvas.SetLeft(outline, ro.X - 3);
+            Canvas.SetTop(outline,  ro.Y - 3);
+            _canvas.Children.Add(outline);
+            _handles.Add(outline);
+        }
+
         IEnumerable<Point> pts;
 
         if (ann.IsRectLike)
