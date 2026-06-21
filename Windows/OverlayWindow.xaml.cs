@@ -18,9 +18,18 @@ public partial class OverlayWindow : Window
     [DllImport("user32.dll")] private static extern bool IsIconic(IntPtr hwnd);
     [DllImport("user32.dll")] private static extern IntPtr RealChildWindowFromPoint(IntPtr hwndParent, POINT pt);
     [DllImport("user32.dll")] private static extern bool ScreenToClient(IntPtr hwnd, ref POINT pt);
+    [DllImport("user32.dll")] private static extern IntPtr MonitorFromPoint(POINT pt, uint dwFlags);
+    [DllImport("user32.dll")] private static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFO lpmi);
 
     [StructLayout(LayoutKind.Sequential)] private struct POINT { public int X, Y; }
     [StructLayout(LayoutKind.Sequential)] private struct RECT  { public int Left, Top, Right, Bottom; }
+    [StructLayout(LayoutKind.Sequential)] private struct MONITORINFO
+    {
+        public int  cbSize;
+        public RECT rcMonitor;
+        public RECT rcWork;
+        public uint dwFlags;
+    }
 
     private const uint GW_HWNDNEXT = 2;
 
@@ -373,6 +382,18 @@ public partial class OverlayWindow : Window
                                                   || childH < r.Bottom - r.Top - 10;
                         if (smallerInAnyDimension && childW > 200 && childH > 200)
                             target = cr;
+                    }
+
+                    // Clip to monitor work area (excludes taskbar)
+                    var midPt = new POINT { X = (target.Left + target.Right) / 2, Y = (target.Top + target.Bottom) / 2 };
+                    var hMon  = MonitorFromPoint(midPt, 2 /* MONITOR_DEFAULTTONEAREST */);
+                    var mi    = new MONITORINFO { cbSize = Marshal.SizeOf<MONITORINFO>() };
+                    if (GetMonitorInfo(hMon, ref mi))
+                    {
+                        target.Left   = Math.Max(target.Left,   mi.rcWork.Left);
+                        target.Top    = Math.Max(target.Top,    mi.rcWork.Top);
+                        target.Right  = Math.Min(target.Right,  mi.rcWork.Right);
+                        target.Bottom = Math.Min(target.Bottom, mi.rcWork.Bottom);
                     }
 
                     int x = Math.Max(0, target.Left);
