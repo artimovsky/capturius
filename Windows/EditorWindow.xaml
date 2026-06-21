@@ -236,25 +236,9 @@
                       VerticalScrollBarVisibility="Auto"
                       PreviewMouseWheel="Scroller_PreviewMouseWheel">
             <ScrollViewer.Background>
-                <DrawingBrush TileMode="Tile" Viewport="0,0,16,16" ViewportUnits="Absolute">
-                    <DrawingBrush.Drawing>
-                        <DrawingGroup>
-                            <GeometryDrawing Brush="#606060">
-                                <GeometryDrawing.Geometry><RectangleGeometry Rect="0,0,16,16"/></GeometryDrawing.Geometry>
-                            </GeometryDrawing>
-                            <GeometryDrawing Brush="#4A4A4A">
-                                <GeometryDrawing.Geometry>
-                                    <GeometryGroup>
-                                        <RectangleGeometry Rect="0,0,8,8"/>
-                                        <RectangleGeometry Rect="8,8,8,8"/>
-                                    </GeometryGroup>
-                                </GeometryDrawing.Geometry>
-                            </GeometryDrawing>
-                        </DrawingGroup>
-                    </DrawingBrush.Drawing>
-                </DrawingBrush>
+                <SolidColorBrush Color="#252525"/>
             </ScrollViewer.Background>
-            <Grid x:Name="ZoomedContent" HorizontalAlignment="Center" VerticalAlignment="Center">
+            <Grid x:Name="ZoomedContent" HorizontalAlignment="Center" VerticalAlignment="Center" ClipToBounds="True">
                 <Grid.LayoutTransform>
                     <ScaleTransform x:Name="ZoomTransform"/>
                 </Grid.LayoutTransform>

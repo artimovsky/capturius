@@ -17,7 +17,10 @@
         <!-- Тёмный оверлей и выделение -->
         <Canvas x:Name="OverlayCanvas"
                 Background="Transparent"
-                MouseLeftButtonDown="Canvas_MouseLeftButtonDown">
+                MouseLeftButtonDown="Canvas_MouseLeftButtonDown"
+                MouseLeftButtonUp="Canvas_MouseLeftButtonUp"
+                MouseMove="Canvas_MouseMove"
+                MouseRightButtonDown="Canvas_MouseRightButtonDown">
             <Path x:Name="DarkOverlay" Fill="#88000000" IsHitTestVisible="False"/>
             <Rectangle x:Name="SelectionBorder"
                        Stroke="#89B4FA"
@@ -60,7 +63,7 @@
             <Border Background="#CC1E1E2E" CornerRadius="6" Padding="12,6">
                 <StackPanel>
                     <TextBlock x:Name="HintText"
-                               Text="Click to set first point  •  ESC — cancel"
+                               Text="Click to set first point  •  ESC or Right Click — cancel"
                                Foreground="#CDD6F4" FontSize="13" FontFamily="Segoe UI"
                                HorizontalAlignment="Center"/>
                     <TextBlock x:Name="SizeText"

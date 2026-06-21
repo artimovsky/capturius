@@ -27,6 +27,8 @@ public partial class OverlayWindow : Window
     private Point _firstPoint;
     private Point _cursor;
     private Point _lastPhysCursor;
+    private Point _mouseDownPoint;
+    private bool  _isDragging;
 
     // Custom crosshair (system cursor hidden) — double: black shadow + white line
     private Line _crossH = null!, _crossV = null!;
@@ -171,17 +173,53 @@ public partial class OverlayWindow : Window
 
     // ── Mouse ─────────────────────────────────────────────────────────────────
 
+    private void Canvas_MouseRightButtonDown(object sender, MouseButtonEventArgs e) => Close();
+
+    private Point SnapPos(Point logPos)
+    {
+        int px = Math.Clamp((int)Math.Round(logPos.X * _dpiScale), 0, _screenshotBitmap.Width  - 1);
+        int py = Math.Clamp((int)Math.Round(logPos.Y * _dpiScale), 0, _screenshotBitmap.Height - 1);
+        return new Point(px / _dpiScale, py / _dpiScale);
+    }
+
     private void Canvas_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        var pos = e.GetPosition(OverlayCanvas);
-        int px = Math.Clamp((int)Math.Round(pos.X * _dpiScale), 0, _screenshotBitmap.Width  - 1);
-        int py = Math.Clamp((int)Math.Round(pos.Y * _dpiScale), 0, _screenshotBitmap.Height - 1);
-        _cursor = new Point(px / _dpiScale, py / _dpiScale);
+        _mouseDownPoint = SnapPos(e.GetPosition(OverlayCanvas));
+        _isDragging     = false;
+        _cursor         = _mouseDownPoint;
+    }
 
+    private void Canvas_MouseMove(object sender, MouseEventArgs e)
+    {
+        if (e.LeftButton != MouseButtonState.Pressed) return;
+        if (_isDragging || _state != State.WaitingFirst) return;
+
+        var pos = SnapPos(e.GetPosition(OverlayCanvas));
+        var d   = pos - _mouseDownPoint;
+        if (Math.Sqrt(d.X * d.X + d.Y * d.Y) > 5)
+        {
+            _isDragging = true;
+            CommitFirstPoint(_mouseDownPoint);
+        }
+    }
+
+    private void Canvas_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        var pos = SnapPos(e.GetPosition(OverlayCanvas));
+        _cursor = pos;
+
+        if (_isDragging)
+        {
+            _isDragging = false;
+            TryConfirm(pos);
+            return;
+        }
+
+        // Click mode
         if (_state == State.WaitingFirst)
-            CommitFirstPoint(_cursor);
+            CommitFirstPoint(pos);
         else
-            TryConfirm(_cursor);
+            TryConfirm(pos);
     }
 
     private void CommitFirstPoint(Point p)
@@ -189,7 +227,7 @@ public partial class OverlayWindow : Window
         _firstPoint = p;
         _state = State.WaitingSecond;
         ShowFirstPointMarker(p);
-        HintText.Text = "Click / Enter — second point  •  Arrows — fine-tune  •  ESC — cancel";
+        HintText.Text = "Click / Enter — second point  •  Arrows — fine-tune  •  ESC or Right Click — cancel";
         SizeText.Visibility = Visibility.Visible;
     }
 

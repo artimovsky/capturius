@@ -70,7 +70,7 @@
         <!-- Подсказка снизу -->
         <StackPanel VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,24">
             <Border Background="#CC1E1E2E" CornerRadius="6" Padding="12,6">
-                <TextBlock Text="Click / Enter — copy HEX  •  Arrows — fine-tune  •  RMB / ESC — cancel"
+                <TextBlock Text="Click / Enter — copy HEX  •  Arrows — fine-tune  •  ESC or Right Click — cancel"
                            Foreground="#CDD6F4" FontSize="13" FontFamily="Segoe UI"
                            HorizontalAlignment="Center"/>
             </Border>
